@@ -119,3 +119,8 @@ Answers: (1) sign-in stays open to anyone with Google or GitHub so reviewers can
 **What the user changed**
 
 - Logged in to DeepSpace, ran `git init`, and set the Git name and email for this repo.
+
+**Git and GitHub (added after the push)**
+
+- Scanned the staged files for secrets and personal email addresses: none found. `.dev.vars` is ignored and not committed.
+- Committed `561b9da`, added the GitHub remote, and pushed branch `master` to https://github.com/lichtszn/channel-lab. `deepspace push` was not run. Nothing was deployed.
