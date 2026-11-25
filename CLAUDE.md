@@ -38,14 +38,14 @@ No paid calls, no secrets, no other writes. Do not add other public write routes
 - Enforce caps with the `uniqueOn` approach if it works under concurrent requests. If it does not, use the docs' daily-cap recipe and note the race limitation in the README.
 - AI readouts must cite the numbers they use.
 - Cron may make paid calls: one digest per owner per week. Each digest counts as 1 of the 50.
-- Only admins may trigger, pause or resume cron tasks.
+- Only admins may trigger, pause or resume cron tasks, or queue background jobs.
 - Email is sent from `<app>@app.space` with `reply_to` set to the user's email. Do not commit that address; keep it in DeepSpace secrets.
 
 ## Template changes (applied; keep them)
 
 - Close the open paid-integration route (`/api/integrations/:name/:endpoint`) so signed-in users cannot bypass server actions and caps.
 - Cap the template AI chat if it is enabled. In the 0.44.2 starter template the in-app chat is off; keep it off unless the user asks for it.
-- Make cron triggering admin-only (the template also lets members trigger it).
+- Make cron triggering and background jobs admin-only (the template also lets members use them).
 
 ## Gates: ask first
 

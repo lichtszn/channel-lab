@@ -25,6 +25,7 @@ import { tasks as cronTasks, runTask as runCronTask } from './src/cron.js'
 import { runJob } from './src/jobs.js'
 import { schemas } from './src/schemas.js'
 import { registerActionRoutes } from './src/server/action-routes.js'
+import { registerClickRoute } from './src/server/click-route.js'
 import {
   registerAuthAndIntegrationRoutes,
   registerPlatformProxyRoutes,
@@ -70,8 +71,8 @@ export class AppJobRoom extends JobRoom<Env> {
     super(state, env, {
       authorizeWrite: async (user) => {
         if (user.userId.startsWith('anon-')) return false
-        const role = await resolveAppRole(env, user.userId)
-        return role === 'member' || role === 'admin'
+        // Admin-only (CLAUDE.md): jobs can spend the owner's credits.
+        return (await resolveAppRole(env, user.userId)) === 'admin'
       },
     })
   }
@@ -117,6 +118,9 @@ export interface Env extends DOBindings<typeof __DO_MANIFEST__> {
    * an authenticated app owner/admin. deepspace dev/test set it locally.
    */
   ALLOW_DEBUG_ROUTES?: string
+  /** Click limits for /go/:slug: 10/min per IP and 120/min per slug (wrangler.toml). */
+  CLICK_IP_LIMITER: RateLimit
+  CLICK_SLUG_LIMITER: RateLimit
 }
 
 export type AppContext = { Bindings: Env }
@@ -144,6 +148,7 @@ registerAgent(app, {
   inApp: false,
 })
 registerPlatformProxyRoutes(app)
+registerClickRoute(app)
 registerStaticRoutes(app)
 
 // Hono registers ONE error handler (last onError wins), and its default is

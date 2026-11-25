@@ -131,3 +131,90 @@ test('API status page shows local retry after first-load API failure', async ({ 
   await expect.poll(() => requestCount).toBeGreaterThan(requestsAfterFailure)
   expect(user.page.url()).toBe(urlAfterFailure)
 })
+
+/** Opens a room socket as this signed-in user, sends one frame, returns the replies. */
+async function sendToRoom(page: import('@playwright/test').Page, room: 'cron' | 'jobs', frame: object) {
+  return page.evaluate(
+    async ({ room, frame }) => {
+      const res = await fetch('/api/auth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      const { token } = (await res.json()) as { token: string }
+      const { sub } = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+      const url = new URL(`/ws/${room}/member-check`, location.href)
+      url.protocol = url.protocol.replace('http', 'ws')
+      url.searchParams.set('token', token)
+      const frames: { type: string; payload?: Record<string, unknown> }[] = []
+      await new Promise<void>((resolve, reject) => {
+        const ws = new WebSocket(url)
+        ws.onopen = () => ws.send(JSON.stringify(frame))
+        ws.onmessage = (e) => frames.push(JSON.parse(e.data))
+        ws.onerror = () => reject(new Error('socket failed'))
+        setTimeout(() => (ws.close(), resolve()), 3000)
+      })
+      return { signedIn: Boolean(sub), frames }
+    },
+    { room, frame },
+  )
+}
+
+test('a member cannot trigger cron tasks', async ({ users }) => {
+  const [user] = await users(1)
+  await user.page.goto('/home')
+  await expect(user.page.getByTestId('nav-user-name')).toHaveText(/\S/, { timeout: 15_000 })
+  const { signedIn, frames } = await sendToRoom(user.page, 'cron', {
+    type: 'cron.trigger',
+    payload: { taskName: 'no-such-task', requestId: 'r1' },
+  })
+  expect(signedIn).toBe(true)
+  // A writer would get `unknown_task` here; `read_only` is the role refusal.
+  expect(JSON.stringify(frames)).toContain('read_only')
+  expect(JSON.stringify(frames)).not.toContain('unknown_task')
+})
+
+test('a member cannot queue background jobs', async ({ users }) => {
+  const [user] = await users(1)
+  await user.page.goto('/home')
+  await expect(user.page.getByTestId('nav-user-name')).toHaveText(/\S/, { timeout: 15_000 })
+  const { signedIn, frames } = await sendToRoom(user.page, 'jobs', {
+    type: 'job.enqueue',
+    payload: { type: 'member-check', payload: {}, requestId: 'r1' },
+  })
+  expect(signedIn).toBe(true)
+  expect(JSON.stringify(frames)).toContain('Write access denied')
+})
+
+test('a member cannot read or create click rows', async ({ users }) => {
+  const [user] = await users(1)
+  await user.page.goto('/home')
+  await expect(user.page.getByTestId('nav-user-name')).toHaveText(/\S/, { timeout: 15_000 })
+  const call = (tool: string, input: object) =>
+    user.page.evaluate(
+      async ({ tool, input }) => {
+        const auth = await fetch('/api/auth/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        })
+        const { token } = (await auth.json()) as { token: string }
+        const res = await fetch(`/_deepspace/agent/browser/tools/${tool}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ input }),
+        })
+        return { status: res.status, body: await res.text() }
+      },
+      { tool, input },
+    )
+  // Make sure a row can exist, so an empty read means "hidden", not "none yet".
+  await user.page.request.get('/go/spike-test', { maxRedirects: 0 })
+  const read = await call('records_query', { collection: 'clicks' })
+  const create = await call('records_create', {
+    collection: 'clicks',
+    data: { variant: 'forged', clickedAt: '2026-01-01T00:00:00Z' },
+  })
+  expect(read.status).toBe(200)
+  expect(JSON.parse(read.body).result.data.records).toEqual([])
+  expect(create.status).toBe(422)
+  expect(create.body).toContain('CREATE DENIED')
+})
