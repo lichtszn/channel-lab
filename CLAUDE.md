@@ -50,8 +50,8 @@ No paid calls, no secrets, no other writes. Do not add other public write routes
 ## Gates: ask first
 
 - Ask the user before every deploy until told otherwise.
-- Source code lives on GitHub: https://github.com/lichtszn/channel-lab. The first deploy locks this in permanently, so ask first. Never run `deepspace push`.
+- Source code lives on GitHub: https://github.com/lichtszn/channel-lab. The 2026-11-25 deploy locked this in permanently. Never run `deepspace push`.
 - The app is registered to the DeepSpace account `lichtszn`. Run `npx deepspace auth whoami` before commands that use the platform.
 - Run the local server with `--host 127.0.0.1`; the default also listens on the network.
-- App name: `channel-lab`. It looked unused on 2026-11-25, but only the first deploy confirms it.
+- App name: `channel-lab`, claimed by the 2026-11-25 deploy (https://channel-lab.app.space).
 - This CLAUDE.md wins over the template's `CLAUDE.deepspace.md` and `AGENTS.md`.

@@ -124,3 +124,52 @@ Answers: (1) sign-in stays open to anyone with Google or GitHub so reviewers can
 
 - Scanned the staged files for secrets and personal email addresses: none found. `.dev.vars` is ignored and not committed.
 - Committed `561b9da`, added the GitHub remote, and pushed branch `master` to https://github.com/lichtszn/channel-lab. `deepspace push` was not run. Nothing was deployed.
+
+## 2026-11-25 - Prompt 3: click-route spike (one approved deploy)
+
+**Prompt**
+
+Answers: create two DeepSpace test accounts and run the two-user tests and the cron-member check; make background jobs admin-only; do the click spike with ONE deploy, GitHub as the source, no `deepspace push`. Spike: public `/go/:slug` that validates a test slug, limits 10/min per IP and 120/min per slug, writes one click row (variant and time, no IP), redirects, and over the limit redirects without counting. Try the Cloudflare rate limiter; if deploy rejects it, stop and ask. Add tests, deploy, test live signed out, report plainly, log, push, STOP.
+
+**What the agent did**
+
+- Created two test accounts (Tester One, Tester Two) with random passwords that were never displayed. They are stored in `~/.deepspace`, outside the repo.
+- Jobs are admin-only (`worker.ts`). The job socket now also hides job history from members.
+- Click route: `src/server/click-route.ts`, table `src/schemas/clicks-schema.ts` (nobody can write from the client; only admins can read), two rate limiters in `wrangler.toml`. Test slug `spike-test` goes to https://example.com/. HEAD requests redirect but are not counted.
+- Created the empty `prd` secrets config, which deploy requires.
+- Deployed once from commit `4605063`: release `rel_01M88VFR8K1V9WR8KSCGB1824X`, https://channel-lab.app.space. The name is claimed, GitHub is locked as the source, and deploy accepted the rate limiters.
+
+**Local results**
+
+- Type-check, lint and production build clean. Unit tests 19 of 19.
+- All 18 browser and API tests pass one at a time (`npx playwright test -c tests/playwright.config.ts --workers=1`), including the two-user tests. Members cannot trigger cron, queue jobs, or read or create click rows. With those protections removed, the cron and job tests failed and the member could see click rows, so the checks are real. That click-row test only printed its result at the time; its assertions were added afterwards.
+- `npx deepspace test run all` (parallel) is flaky on this machine: 3 of 18 failed, then 18 of 18, then 3 of 18. The commit before the spike failed 6 of 13 the same way, so the spike did not cause it. Low free memory (2.4 of 15.8 GB) is a likely cause, not proven.
+- Limits were exact locally, by row count: 15 clicks from one IP stored 10; 140 more from 140 IPs stored 110 (120 for the slug). Every click redirected.
+
+**Live results (signed out)**
+
+| Check | Result |
+|---|---|
+| One click in a clean browser | 302 to example.com, 1 row stored, no cookies set |
+| Row contents | variant and time; DeepSpace adds an id, its own times, and the app owner's id as creator. No IP |
+| Unknown slugs, POST | 404, no row |
+| HEAD | 302, no row |
+| Forged `CF-Connecting-IP` | 403 before reaching the app, no row |
+| Paid-integration route / AI chat / actions / tool route signed out | 403 / 404 / 401 / 401 |
+| A: 40 clicks in parallel, 2 s | 40 redirected, **40 counted** |
+| B: 40 clicks on one reused connection, 2 s | 40 redirected, 11 counted |
+| C: 50 clicks, a new connection each, 41 s | **50 counted** (redirect codes were not recorded) |
+| D: 200 clicks, a new connection each, 13 s | 200 redirected, 26 counted |
+
+- The redirect behaved as asked. The per-IP limit did not hold at 10 per minute: it is approximate, and bursts or steady clicking on new connections can get well past it. All calls came from one IP and one Cloudflare location (DFW). Counting per connection or machine would fit the results; the cause was not proven.
+- The per-slug limit was not reached live, because all traffic came from one IP. It is tested locally only.
+- 128 test rows remain in the live `clicks` table. Nothing can delete click rows yet.
+
+**Findings**
+
+- Finding 7 above is settled: deploy accepts `[[ratelimits]]` (CLI 0.44.2), so the custom bindings page is out of date.
+- 14: the architecture page still lists `/api/ai/*` as a main route; the 0.44.2 starter keeps it off.
+
+**What the user changed**
+
+- (nothing recorded yet)
