@@ -27,7 +27,11 @@ Sign-in stays open to anyone with Google or GitHub, so reviewers can test. Prote
 3. writes one click row, only if under both limits,
 4. redirects, even when over a limit.
 
-Never store IP addresses in click rows. Try the Cloudflare rate limiter in the click spike; if deploy rejects it, stop and ask the user before choosing a fallback.
+Never store IP addresses in click rows.
+
+Click counts are approximate. The Cloudflare rate limiter stays as a coarse abuse filter: the per-IP limit is leaky on the live site, and the per-slug limit is tested only locally. Do not build the exact per-slug counter yet; it is the "what I'd do next" item in the README.
+
+The 128 rows on the test variant `spike-test` are test data. Do not delete them.
 
 No paid calls, no secrets, no other writes. Do not add other public write routes.
 
@@ -36,7 +40,7 @@ No paid calls, no secrets, no other writes. Do not add other public write routes
 - The app owner pays for AI and email (`billing: 'developer'`).
 - Readouts: 5 per user per day, and an app-wide cap of 50 per day. Days reset at midnight UTC.
 - Enforce caps with the `uniqueOn` approach if it works under concurrent requests. If it does not, use the docs' daily-cap recipe and note the race limitation in the README.
-- AI readouts must cite the numbers they use.
+- AI readouts must cite the numbers they use, and must say that click counts are approximate.
 - Cron may make paid calls: one digest per owner per week. Each digest counts as 1 of the 50.
 - Only admins may trigger, pause or resume cron tasks, or queue background jobs.
 - Email is sent from `<app>@app.space` with `reply_to` set to the user's email. Do not commit that address; keep it in DeepSpace secrets.
@@ -49,7 +53,7 @@ No paid calls, no secrets, no other writes. Do not add other public write routes
 
 ## Gates: ask first
 
-- Ask the user before every deploy until told otherwise.
+- Deploys to `channel-lab` are approved. Before each one, tell the user what changed and re-run type-check, lint and tests one file at a time (`npx playwright test -c tests/playwright.config.ts --workers=1`).
 - Source code lives on GitHub: https://github.com/lichtszn/channel-lab. The 2026-11-25 deploy locked this in permanently. Never run `deepspace push`.
 - The app is registered to the DeepSpace account `lichtszn`. Run `npx deepspace auth whoami` before commands that use the platform.
 - Run the local server with `--host 127.0.0.1`; the default also listens on the network.

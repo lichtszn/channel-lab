@@ -173,3 +173,18 @@ Answers: create two DeepSpace test accounts and run the two-user tests and the c
 **What the user changed**
 
 - (nothing recorded yet)
+
+## 2026-11-25 - Decisions after the click spike
+
+**Prompt**
+
+(1) Keep the Cloudflare limiter as a coarse abuse filter (option B) and do not build the exact counter yet. Record in the README and CLAUDE.md that click counts are approximate, with the exact per-slug counter as the "what I'd do next" item. The AI readout must say click counts are approximate. (2) Deploys to channel-lab are approved from now on, with GitHub as the source and never `deepspace push`; before each deploy, tell the user what changed and re-run type-check, lint and tests one file at a time. (3) Keep the 128 test clicks and note them in the README as test data on a test variant. Update CLAUDE.md and AGENT_LOG.md, commit, push, stop; do not start Prompt 4.
+
+**What the agent did**
+
+- Created `README.md` (there was none) and updated `CLAUDE.md` with these decisions.
+- No code changes and no deploy. Type-check and tests were not re-run, because only documentation changed.
+
+**What the user changed**
+
+- Rejected the agent's recommended fix (an exact in-memory counter) for now, in favour of keeping the approximate limiter and documenting it.
