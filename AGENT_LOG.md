@@ -220,3 +220,21 @@ Collections `experiments` (title, hypothesis, audience, success metric, destinat
 **What the user changed**
 
 - (nothing recorded yet)
+
+## 2026-11-25 - Deploy of Prompt 4+5
+
+**Prompt**
+
+OK to deploy. Re-run type-check, lint and tests first, deploy with GitHub as the source (never `deepspace push`), check the live site signed out (landing page, sign-in screen, an unknown `/go/` slug returning 404), add three notes to the README (the flaky template test, the screen-only 2 to 4 channel limit, the form checks the server does not enforce), commit and push, then stop.
+
+**What the agent did**
+
+- Added the README notes and committed them (`fa35aec`) so the deploy shipped a clean tree.
+- Pre-deploy checks: type-check and lint clean, unit tests 33 of 33, browser and API tests one file at a time 20 of 20 (the flaky template test passed this run).
+- Deployed release `rel_01M8B3ZV8E2954R40HANF0JKA7` from `fa35aec`: GitHub source, clean tree, edge and data plane confirmed. `deepspace push` was not run.
+- Live checks in a clean signed-out browser: landing page 200 with its heading and Sign in link; Sign in opened the "Sign in to continue" screen at `/experiments`; `/go/zzzz9999`, `/go/spike-test` and `/go/nope` returned 404; no cookies set; no console errors.
+- Not checked by the agent: anything signed in on the live site. That is the user's manual check.
+
+**What the user changed**
+
+- (nothing recorded yet)
