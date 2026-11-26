@@ -6,6 +6,7 @@ import { ErrorPanel, LoadingPanel } from '@/components/StatusPanel'
 import { ChannelCard } from '@/components/experiment/ChannelCard'
 import { ClicksByDay } from '@/components/experiment/ClicksByDay'
 import { DecisionPanel } from '@/components/experiment/DecisionPanel'
+import { ReadoutPanel } from '@/components/experiment/ReadoutPanel'
 import { countByVariant } from '@/lib/stats'
 import type { Click } from '@/schemas/clicks-schema'
 import type { Experiment } from '@/schemas/experiments-schema'
@@ -90,6 +91,10 @@ export default function ExperimentPage() {
           </>
         )}
       </section>
+
+      <div className="mt-10">
+        <ReadoutPanel experimentId={id} channelCount={channelCount} />
+      </div>
 
       <section className="mt-10">
         <DecisionPanel key={id} experimentId={id} decision={e.decision} reason={e.decisionReason} />

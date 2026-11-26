@@ -339,3 +339,31 @@ Run the copy for real, re-run to prove it writes 0, confirm the per-channel coun
 **What the user changed**
 
 - Chose copy-only (originals kept as an audit trail) instead of the agent's proposal to delete originals after copying.
+
+## 2026-11-26 - Prompt 7: AI readout
+
+**Prompt**
+
+Read the AI chat and external-API docs and check integration names. Add a "Generate readout" button backed by a server action: owner of the experiment only; 5 per user and 50 per app per UTC day, using `uniqueOn` if it holds under concurrency (tested), otherwise the docs recipe with the limitation noted; developer billing; disabled while loading; error and retry states. Send ONLY exact numbers (per channel clicks, reach, outcome count and label, the success metric and hypothesis). The memo names the leading channel, quotes its numbers, says counts are approximate and the sample is small, makes no significance claim, and suggests one next test. Check in code that every number in the memo appears in the data sent; otherwise show an error. Show the numbers beside the memo. Tests: mocked AI, ownership, caps, number check. Run checks, update docs, commit, push, wait for OK to deploy.
+
+**What the agent did**
+
+- Read the AI chat guide and the worker AI reference. Listed the catalog (free): the endpoint is `anthropic/chat-completion` (input `model`, `system`, `messages`, `max_tokens`, `temperature`; metered at provider cost; no output schema). No paid test call was made.
+- `src/lib/readout.ts`: prompt, exact data shape, number extraction, `checkMemo` (numbers, "approximate", a channel name, no significance claim), and reading the Anthropic response.
+- `src/actions/readout.ts` (`generateReadout`): checks ownership; reads the owner's channels and clicks (all pages); claims a per-user then an app slot in the new `readout_usage` collection (`uniqueOn` scope, day, slot; all columns required; no client access), giving the user slot back if the app is full; calls the model (`claude-opus-5-5`, temperature 0, 700 tokens); checks the memo. `anthropic: { billing: 'developer' }` added to `src/integrations.ts`.
+- Test hook: `fakeModel` (plus `testDay`, `fakeMemo`) only when `ALLOW_DEBUG_ROUTES` is "true". It is on locally and not set in production (the `prd` secrets config is empty).
+- UI: `src/components/experiment/ReadoutPanel.tsx` on the experiment page.
+- Tests: `src/lib/readout.test.ts` (10), `src/actions/readout.test.ts` (11: ownership, the data sent, 5 per user, 20 simultaneous from one user (exactly 5), 60 racing across 12 users (exactly 50, user slots given back), UTC day rollover, rejected memo, model failure, fake-model gating, no channels), `tests/readout.spec.ts` (3, real local record room, fake model only).
+
+**Results**
+
+- Type-check and lint clean. Unit tests 75 of 75.
+- Browser and API tests one file at a time: 25 of 26. The failure was the known flaky template test; rerun alone it failed again.
+- `tests/readout.spec.ts` first run: one test failed with `ERR_NETWORK_IO_SUSPENDED` on its first page load (the browser's network was suspended, not an assertion); the rerun passed 3 of 3.
+- Real record room: 8 simultaneous readouts gave exactly 5 successes (slots 1 to 5) and 3 cap refusals.
+- Removing `uniqueOn` made that test fail, but for a mixed reason: the local SQLite table kept its unique index, so duplicate claims errored instead of succeeding. This shows the test catches broken behaviour, not what happens with no uniqueness at all; the unit race tests cover that logic.
+- Not deployed. No paid AI call has been made yet.
+
+**What the user changed**
+
+- (nothing recorded yet)

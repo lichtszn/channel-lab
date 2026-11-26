@@ -14,7 +14,8 @@ Status: early. Live at https://channel-lab.app.space. Source: https://github.com
   - hand-entered reach (people who could see it), outcome count and outcome label per channel;
   - rates per channel: clicks per reach, and outcomes per click. Both show "n/a" until reach is entered. They are simple ratios, not a significance test;
   - rename a channel, and delete a channel after confirming;
-  - a decision (keep, change, stop or undecided) with a short reason.
+  - a decision (keep, change, stop or undecided) with a short reason;
+  - a "Generate readout" button: a short AI memo naming the leading channel, quoting its numbers, with the numbers it was given shown beside it.
 - The tracked link redirects to the experiment's destination and logs one click.
 
 ## Who can see what
@@ -26,6 +27,15 @@ Status: early. Live at https://channel-lab.app.space. Source: https://github.com
 - **Deleting:** nobody can delete experiments. Channels are deleted only through a server action that refuses any channel with clicks, so click data is never orphaned. Rename a channel instead.
 - **Tracked links:** each slug is unique and never changes. A link only works if the same person owns the channel and the experiment.
 - **Signed-out visitors** see only the landing page and can follow tracked links.
+
+## AI readout
+
+- **Who:** only the signed-in owner of the experiment. The app owner pays (`billing: 'developer'`).
+- **Caps:** 5 readouts per person and 50 for the whole app per UTC day. Each request claims a numbered slot (1 to 5 per person, 1 to 50 for the app) in a `readout_usage` table that refuses duplicates (`uniqueOn`), before any paid call. This was tested with 8 simultaneous requests against the real local database: exactly 5 succeeded. A slot is used even when the AI fails or its memo is rejected, because the call was already paid for.
+- **What the AI sees:** only, per channel, clicks, reach, outcome count and outcome label, plus the hypothesis and success metric. Model: `claude-opus-5-5` through the platform's `anthropic/chat-completion`.
+- **Number check:** every number in the memo must appear in that data, the memo must say click counts are approximate, name a channel, and not claim statistical significance. If not, you get an error and a "Try again" button instead of the memo. The check is strict, so a valid memo that happens to write a date or a computed percentage is rejected and uses a slot.
+- **Not saved:** a readout is shown once; reloading the page clears it.
+- **Testing:** tests never call the AI. A fake model is used, and only works where `ALLOW_DEBUG_ROUTES` is on (local development).
 
 ## Known limitations
 
@@ -50,4 +60,5 @@ Status: early. Live at https://channel-lab.app.space. Source: https://github.com
 - Keep running per-day click totals on the server, so pages do not need every click row.
 - Enforce the 2 to 4 channel limit on the server.
 - Let users edit an experiment's title, hypothesis, audience, success metric and destination.
-- Build the AI readout (5 per user per day, 50 per app per day) and the weekly email digest.
+- Save readouts so they survive a reload, and show how many are left today.
+- Build the weekly email digest.

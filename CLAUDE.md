@@ -53,8 +53,10 @@ No paid calls, no secrets, no other writes. Do not add other public write routes
 
 - The app owner pays for AI and email (`billing: 'developer'`).
 - Readouts: 5 per user per day, and an app-wide cap of 50 per day. Days reset at midnight UTC.
-- Enforce caps with the `uniqueOn` approach if it works under concurrent requests. If it does not, use the docs' daily-cap recipe and note the race limitation in the README.
-- AI readouts must cite the numbers they use, and must say that click counts are approximate.
+- Caps use the `uniqueOn` approach, tested under concurrent requests: `readout_usage` rows (scope, day, slot), claimed in `src/actions/readout.ts` BEFORE the paid call. A slot is spent even if the model fails or its memo is rejected.
+- The readout (`generateReadout`, model `claude-opus-5-5` via `anthropic/chat-completion`) sends the model ONLY: per channel clicks, reach, outcome count and label, plus the hypothesis and success metric. Never titles, ids, slugs, URLs or user data.
+- Every number in a memo must appear in the data sent (`checkMemo` in `src/lib/readout.ts`), and the memo must say counts are approximate, name a channel, and not claim significance. Otherwise show an error, never the memo.
+- Tests must never make paid calls: use `fakeModel: true`, which works only when `ALLOW_DEBUG_ROUTES` is "true" (local). Never set `ALLOW_DEBUG_ROUTES` in production secrets.
 - Cron may make paid calls: one digest per owner per week. Each digest counts as 1 of the 50.
 - Only admins may trigger, pause or resume cron tasks, or queue background jobs.
 - Email is sent from `<app>@app.space` with `reply_to` set to the user's email. Do not commit that address; keep it in DeepSpace secrets.
