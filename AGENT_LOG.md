@@ -295,3 +295,26 @@ OK to deploy after re-running checks; GitHub as the source, never `deepspace pus
 **What the user changed**
 
 - Posted real tracked links before this deploy (the 33 clicks above).
+
+## 2026-11-26 - One-off copy of old clicks (in progress: dry run done, waiting for OK)
+
+**Prompt**
+
+Build and run the re-create migration, but COPY only: keep the originals as an audit trail. Temporary owner-only action; dry run first, showing the copies per channel (expected iMessage 19, Class Groupchat 7, LinkedIn 4, Instagram Story 3, 33 total); wait for OK; run for real; re-running must not duplicate (ids derived from the original click); skip spike-test rows; afterwards confirm the live counts are 33 plus new clicks, as the owner and on the page; then remove the action in a second deploy and confirm it is gone. Unit-test the logic with fake rows. Log the pre-deploy snapshot and the reason. Deploys approved.
+
+**Why**
+
+Clicks recorded before 2026-11-26 05:53 UTC have no experiment or owner, so after the Prompt 6 deploy nobody can read them. Their columns are immutable, so they cannot be stamped in place. Pre-deploy snapshot (owner account, 05:53:03 UTC, all pages read): iMessage 19, Class Groupchat 7, LinkedIn 4, Instagram Story 3; 232 spike-test rows.
+
+**What the agent did so far**
+
+- Added `src/actions/backfill-clicks.ts` (temporary, owner-only, dry run by default) and registered it in `src/actions/index.ts`. Each copy has id `bf-<original id>` and keeps the original click time. Originals are never changed or deleted. Spike-test rows, already-stamped rows, copies, and clicks whose channel or experiment is gone or has a different owner are skipped. All pages are read before anything is written.
+- Unit tests with fake rows and 3-row pages (`src/actions/backfill-clicks.test.ts`): owner-only, dry run writes nothing, copies keep the time and leave originals untouched, re-running writes nothing. 57 of 57 unit tests pass; type-check and lint clean.
+- Local dry run against the dev database: read 308 rows over several pages, nothing to copy (290 spike-test, 12 already stamped, 6 from deleted test channels); refused a signed-out call.
+- Browser tests before the deploy: 22 of 23. The failure was the known flaky template test; the deploy command did not stop on it, so the agent deployed before re-checking. Rerun alone afterwards it passed twice.
+- Deploy #1: release `rel_01M8B76AFVV128DRCYAGHE9W1A` from `22931cc` (GitHub source).
+- Live dry run (06:04 UTC, called with the CLI's own token, never printed): 267 rows read; would copy iMessage 19, Class Groupchat 7, LinkedIn 4, Instagram Story 3 = 33, matching the snapshot, so no click was lost in the 31 seconds before the earlier deploy. Skipped 232 spike-test and 2 already-stamped rows (clicks since the Prompt 6 deploy). Nothing written.
+
+**What the user changed**
+
+- (nothing recorded yet)
