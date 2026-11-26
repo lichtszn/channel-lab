@@ -206,8 +206,8 @@ test('a member cannot read or create click rows', async ({ users }) => {
       },
       { tool, input },
     )
-  // Make sure a row can exist, so an empty read means "hidden", not "none yet".
-  await user.page.request.get('/go/spike-test', { maxRedirects: 0 })
+  // Local click rows already exist from earlier runs; experiments.spec.ts also
+  // writes one. An empty read therefore means hidden, not "none yet".
   const read = await call('records_query', { collection: 'clicks' })
   const create = await call('records_create', {
     collection: 'clicks',

@@ -36,16 +36,11 @@ test.describe('API tests', () => {
 })
 
 test.describe('public click route', () => {
-  test('redirects a signed-out visitor, over the limit too', async ({ request }) => {
-    for (let i = 0; i < 15; i++) {
-      const res = await request.get('/go/spike-test', { maxRedirects: 0 })
-      expect(res.status()).toBe(302)
-      expect(res.headers()['location']).toBe('https://example.com/')
+  // Redirects and click rows for real variants are covered in experiments.spec.ts.
+  test('unknown slugs, the retired spike slug, and other methods get 404', async ({ request }) => {
+    for (const path of ['/go/nope', '/go/zzzz9999', '/go/spike-test']) {
+      expect((await request.get(path, { maxRedirects: 0 })).status()).toBe(404)
     }
-  })
-
-  test('unknown slugs and other methods get 404', async ({ request }) => {
-    expect((await request.get('/go/nope', { maxRedirects: 0 })).status()).toBe(404)
-    expect((await request.post('/go/spike-test', { data: {} })).status()).toBe(404)
+    expect((await request.post('/go/zzzz9999', { data: {} })).status()).toBe(404)
   })
 })

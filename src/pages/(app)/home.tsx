@@ -1,28 +1,27 @@
 /**
- * Placeholder home page — replace this with the app's real home.
- *
- * This is intentionally unstyled scaffolding, not a design to build on.
- * Design the app's own look (layout, theme tokens, typography) from your
- * product's point of view instead of extending this page.
+ * /home is where sign-in lands. Signed-in users go straight to their
+ * experiments; signed-out visitors see a short pointer instead of a blank page.
  */
 
-import { useAuthProfileReady } from 'deepspace'
-import { APP_NAME } from '../../constants'
+import { Link, Navigate } from 'react-router-dom'
+import { useAuth } from 'deepspace'
+import { LoadingPanel } from '@/components/StatusPanel'
 
 export default function HomePage() {
-  const { isSignedIn, user } = useAuthProfileReady({ requireUser: true })
+  const { isLoaded, isSignedIn } = useAuth()
+
+  if (!isLoaded) return <LoadingPanel label="Loading…" />
+  if (isSignedIn) return <Navigate to="/experiments" replace />
 
   return (
-    <div className="flex min-h-full flex-col items-center justify-center gap-3 bg-background px-6 text-center text-foreground">
-      <h1 className="text-2xl font-semibold">{APP_NAME}</h1>
+    <div className="flex min-h-full flex-col items-center justify-center gap-4 px-6 py-16 text-center text-foreground">
+      <h1 className="text-2xl font-semibold">Channel Lab</h1>
       <p className="max-w-md text-sm text-muted-foreground">
-        This is a placeholder page. Replace <code>src/pages/(app)/home.tsx</code>{' '}
-        with the app&apos;s real home, and give the app its own theme in{' '}
-        <code>src/themes.css</code>.
+        Sign in to see your experiments and their tracked links.
       </p>
-      {isSignedIn && user && (
-        <p className="text-sm text-muted-foreground">Signed in as {user.name ?? user.email}</p>
-      )}
+      <Link to="/experiments" className="text-sm font-medium text-primary underline-offset-4 hover:underline">
+        Sign in
+      </Link>
     </div>
   )
 }

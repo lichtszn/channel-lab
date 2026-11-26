@@ -22,16 +22,27 @@ Sign-in stays open to anyone with Google or GitHub, so reviewers can test. Prote
 
 `/go/:slug` is the ONE public route, and the single exception to the server-action rule. Visitors use it without signing in. It only:
 
-1. validates the slug,
+1. validates the slug and looks up a real variant (`src/server/click-route.ts`); unknown slugs get 404,
 2. applies rate limits: 10 per minute per IP and 120 per minute per slug,
 3. writes one click row, only if under both limits,
-4. redirects, even when over a limit.
+4. redirects to the variant's experiment destination, even when over a limit.
+
+A variant only works if its owner also owns the experiment, and only http(s) destinations redirect.
 
 Never store IP addresses in click rows.
 
 Click counts are approximate. The Cloudflare rate limiter stays as a coarse abuse filter: the per-IP limit is leaky on the live site, and the per-slug limit is tested only locally. Do not build the exact per-slug counter yet; it is the "what I'd do next" item in the README.
 
-The 128 rows on the test variant `spike-test` are test data. Do not delete them.
+The 128 rows on the test variant `spike-test` are test data. Do not delete them. That slug no longer redirects.
+
+## Data and permissions
+
+- `experiments` and `variants`: each user sees and changes only their own rows. That includes admins and the app owner.
+- Ownership uses `ownerField: 'ownerId'` on a column marked `userBound` and `immutable`, as the docs say. Never let clients set it.
+- `variants.slug` is unique (`uniqueOn`) and immutable, because shared links must not change. `experimentId` is immutable.
+- `clicks`: only the click route writes them; only admins can read them. Click rows store the variant id and the time.
+- The 2 to 4 channels per experiment and the http(s) check on the form are enforced in the UI only. The click route checks http(s) again.
+- Keep `src/schemas/schemas.test.ts` passing: every schema must have no schema-lint warnings.
 
 No paid calls, no secrets, no other writes. Do not add other public write routes.
 

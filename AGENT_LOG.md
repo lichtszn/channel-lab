@@ -188,3 +188,35 @@ Answers: create two DeepSpace test accounts and run the two-user tests and the c
 **What the user changed**
 
 - Rejected the agent's recommended fix (an exact in-memory counter) for now, in favour of keeping the approximate limiter and documenting it.
+
+## 2026-11-25 - Prompt 4+5: experiments, channels, real links, screens
+
+**Prompt**
+
+Collections `experiments` (title, hypothesis, audience, success metric, destination URL, decision keep/change/stop/none, decision reason) and `variants` (experiment, channel name, unique slug, manual outcome count, outcome label); keep `clicks`. Users see and edit only their own; clicks stay server-written; `ownerField` with `userBound` as the docs say. `/go/:slug` looks up a real variant and redirects to its experiment's destination, keeping all rules. Signed-in screens: list, create form, experiment page with 2 to 4 channels and copyable links, with loading, empty and error states. Public landing page. Tests: two accounts proving B cannot read or edit A's data, and a real-variant click logs a row. Run checks, explain each permission in one sentence, update docs, commit and push, then wait for OK before deploying.
+
+**What the agent did**
+
+- Read the records, data model, permissions and realtime docs, and the 0.44.2 code for `userBound`, `immutable`, `required`, `uniqueOn` and permission checks.
+- Added `src/schemas/experiments-schema.ts` and `src/schemas/variants-schema.ts`, registered in `src/schemas.ts`.
+- Rewrote `src/server/click-route.ts`: looks up the variant by slug, requires the variant's owner to own the experiment, redirects only to http(s) destinations, and answers 503 if the lookup fails. Limits, no-IP and HEAD rules are unchanged. The hard-coded `spike-test` variant is gone.
+- Screens: `src/pages/(app)/(protected)/experiments/` (`index.tsx`, `new.tsx`, `[id].tsx`), `src/components/StatusPanel.tsx`, new landing page text, `/home` now forwards signed-in users to their experiments, nav and SEO text.
+- Tests: `tests/experiments.spec.ts` (3 tests), `tests/helpers/local-clicks.ts` (reads the local dev database, because members cannot read clicks), `src/schemas/schemas.test.ts`, rewritten unit tests for the click route. Old `spike-test` tests changed to expect 404.
+
+**Results**
+
+- Type-check and lint clean. Unit tests 33 of 33.
+- Browser and API tests one file at a time: 19 of 20. The failure is the template test "API status page renders loading success and error states". Run alone it passed 1 of 3 times. It failed the same way during Prompt 3, before this work.
+- With permissions loosened, the privacy test failed; with the click route's owner check removed, the cross-account link test failed. Restored, all 3 pass.
+- Looked at screenshots of the landing page and the signed-out experiments page: both show content.
+
+**Limits to know**
+
+- The 2 to 4 channel limit and the form's http(s) check are UI-only. The SDK does not check `select` values, so `decision` is not validated on the server either.
+- Admins (including the app owner) also see only their own experiments.
+- Editing outcomes and decisions has no screen yet.
+- Not deployed.
+
+**What the user changed**
+
+- (nothing recorded yet)
