@@ -79,13 +79,13 @@ describe('/go/:slug', () => {
     expect(created).toHaveLength(1)
   })
 
-  it('stores only the variant id and time, never the IP', async () => {
+  it('stores the variant, experiment, owner and time, never visitor data', async () => {
     await setup().go(`/go/${SLUG}`)
     const [row] = created
     expect(row.collection).toBe('clicks')
     const data = row.data as Record<string, unknown>
-    expect(Object.keys(data).sort()).toEqual(['clickedAt', 'variant'])
-    expect(data.variant).toBe('var-1')
+    expect(Object.keys(data).sort()).toEqual(['clickedAt', 'experimentId', 'ownerId', 'variant'])
+    expect(data).toMatchObject({ variant: 'var-1', experimentId: 'exp-1', ownerId: 'alice' })
     expect(JSON.stringify(row)).not.toContain(IP)
   })
 

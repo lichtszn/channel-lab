@@ -1,25 +1,26 @@
-import { useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutations, useQuery } from 'deepspace'
 import { Badge, Button, Input, Label } from '@/components/ui'
 import { ErrorPanel, LoadingPanel } from '@/components/StatusPanel'
+import { ChannelCard } from '@/components/experiment/ChannelCard'
+import { ClicksByDay } from '@/components/experiment/ClicksByDay'
+import { DecisionPanel } from '@/components/experiment/DecisionPanel'
+import { countByVariant } from '@/lib/stats'
+import type { Click } from '@/schemas/clicks-schema'
 import type { Experiment } from '@/schemas/experiments-schema'
 import { MAX_VARIANTS, MIN_VARIANTS, newSlug, type Variant } from '@/schemas/variants-schema'
 
-function trackedLink(slug: string): string {
-  return `${window.location.origin}/go/${slug}`
-}
-
 export default function ExperimentPage() {
   const { id = '' } = useParams()
-  // Permissions return only the signed-in user's rows, so someone else's id is "not found".
+  // All three are live subscriptions: the server pushes changes, nothing polls.
+  // Permissions only return the signed-in user's own rows, so someone else's id is "not found".
   const experiments = useQuery<Experiment>('experiments')
-  const variants = useQuery<Variant>('variants', {
-    where: { experimentId: id },
-    orderBy: 'createdAt',
-    orderDir: 'asc',
-  })
+  const variants = useQuery<Variant>('variants', { where: { experimentId: id }, orderBy: 'createdAt', orderDir: 'asc' })
+  const clicks = useQuery<Click>('clicks', { where: { experimentId: id } })
   const experiment = experiments.records.find((r) => r.recordId === id)
+  const clickRows = useMemo(() => clicks.records.map((r) => r.data), [clicks.records])
+  const counts = useMemo(() => countByVariant(clickRows), [clickRows])
 
   if (experiments.status === 'loading') return <Shell><LoadingPanel label="Loading experiment…" /></Shell>
   if (experiments.status === 'error')
@@ -27,19 +28,17 @@ export default function ExperimentPage() {
   if (!experiment)
     return (
       <Shell>
-        <ErrorPanel
-          title="Experiment not found"
-          detail="It may have been deleted, or it belongs to another account."
-        />
+        <ErrorPanel title="Experiment not found" detail="It may have been deleted, or it belongs to another account." />
       </Shell>
     )
 
   const e = experiment.data
+  const channelCount = variants.records.length
   return (
     <Shell>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <h1 data-testid="experiment-title" className="text-2xl font-semibold tracking-tight">{e.title}</h1>
-        {e.decision && e.decision !== 'none' && <Badge variant="secondary">{e.decision}</Badge>}
+        {e.decision && e.decision !== 'none' && <Badge variant="secondary" data-testid="decision-badge">{e.decision}</Badge>}
       </div>
 
       <dl className="mt-6 grid gap-4 rounded-lg border border-border bg-card p-5 text-sm sm:grid-cols-2">
@@ -54,45 +53,55 @@ export default function ExperimentPage() {
         <p className="mt-1 text-sm text-muted-foreground">
           Add {MIN_VARIANTS} to {MAX_VARIANTS} channels. Each gets its own tracked link to your destination.
         </p>
+        <p data-testid="clicks-caveat" className="mt-2 rounded-md bg-secondary px-3 py-2 text-xs text-secondary-foreground">
+          Click counts are approximate: the abuse filter is loose, so one visitor can inflate them. A click is not a signup.
+          Rates are simple ratios, not proof that one channel is better.
+        </p>
 
-        {variants.status === 'loading' && <LoadingPanel label="Loading channels…" />}
+        {(variants.status === 'loading' || clicks.status === 'loading') && <LoadingPanel label="Loading channels and clicks…" />}
         {variants.status === 'error' && (
           <div className="mt-4"><ErrorPanel title="Could not load channels" detail={variants.error} /></div>
         )}
-        {variants.status === 'ready' && (
+        {clicks.status === 'error' && (
+          <div className="mt-4"><ErrorPanel title="Could not load click counts" detail={clicks.error} /></div>
+        )}
+        {variants.status === 'ready' && clicks.status !== 'loading' && (
           <>
-            {variants.records.length === 0 ? (
+            {channelCount === 0 ? (
               <p data-testid="variants-empty" className="mt-4 rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
                 No channels yet. Add your first one below.
               </p>
             ) : (
               <ul data-testid="variants-list" className="mt-4 space-y-3">
                 {variants.records.map((v) => (
-                  <VariantRow key={v.recordId} variant={v.data} />
+                  <ChannelCard key={v.recordId} variant={v} clicks={counts.get(v.recordId) ?? 0} canDelete={channelCount > MIN_VARIANTS} />
                 ))}
               </ul>
             )}
-            {variants.records.length > 0 && variants.records.length < MIN_VARIANTS && (
+            {channelCount > 0 && channelCount < MIN_VARIANTS && (
               <p className="mt-3 text-sm text-muted-foreground">Add at least {MIN_VARIANTS} channels to compare them.</p>
             )}
-            {variants.records.length < MAX_VARIANTS ? (
+            {channelCount < MAX_VARIANTS ? (
               <AddVariant experimentId={id} />
             ) : (
               <p className="mt-4 text-sm text-muted-foreground">This experiment has the maximum of {MAX_VARIANTS} channels.</p>
             )}
+            {clicks.status === 'ready' && <div className="mt-6"><ClicksByDay clicks={clickRows} /></div>}
           </>
         )}
+      </section>
+
+      <section className="mt-10">
+        <DecisionPanel key={id} experimentId={id} decision={e.decision} reason={e.decisionReason} />
       </section>
     </Shell>
   )
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="mx-auto max-w-3xl px-6 py-10 text-foreground">
-      <Link to="/experiments" className="text-sm text-muted-foreground hover:text-foreground">
-        ← My experiments
-      </Link>
+      <Link to="/experiments" className="text-sm text-muted-foreground hover:text-foreground">← My experiments</Link>
       <div className="mt-3">{children}</div>
     </div>
   )
@@ -104,36 +113,6 @@ function Detail({ label, value }: { label: string; value: string }) {
       <dt className="text-muted-foreground">{label}</dt>
       <dd className="mt-0.5 break-words">{value || '—'}</dd>
     </div>
-  )
-}
-
-function VariantRow({ variant }: { variant: Variant }) {
-  const link = trackedLink(variant.slug)
-  const [copied, setCopied] = useState<'yes' | 'failed' | null>(null)
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(link)
-      setCopied('yes')
-    } catch {
-      setCopied('failed')
-    }
-    setTimeout(() => setCopied(null), 2000)
-  }
-
-  return (
-    <li data-testid="variant-row" className="rounded-lg border border-border bg-card p-4">
-      <p className="font-medium">{variant.channelName}</p>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <Input readOnly value={link} aria-label={`Tracked link for ${variant.channelName}`} data-testid="tracked-link" className="min-w-0 flex-1 font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
-        <Button type="button" variant="outline" size="sm" onClick={copy}>
-          {copied === 'yes' ? 'Copied' : 'Copy link'}
-        </Button>
-      </div>
-      {copied === 'failed' && (
-        <p className="mt-2 text-xs text-muted-foreground">Copy failed. Select the link and copy it by hand.</p>
-      )}
-    </li>
   )
 }
 
@@ -173,9 +152,7 @@ function AddVariant({ experimentId }: { experimentId: string }) {
         <Label htmlFor="channelName">Channel name</Label>
         <Input id="channelName" value={channelName} placeholder="LinkedIn" onChange={(e) => setChannelName(e.target.value)} />
       </div>
-      <Button type="submit" disabled={!ready || saving}>
-        {saving ? 'Adding…' : 'Add channel'}
-      </Button>
+      <Button type="submit" disabled={!ready || saving}>{saving ? 'Adding…' : 'Add channel'}</Button>
       {problem && <div className="w-full"><ErrorPanel title={problem} /></div>}
     </form>
   )

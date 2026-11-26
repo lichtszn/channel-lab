@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useMutations } from 'deepspace'
+import { useAuth } from 'deepspace'
 import { Button, Input, Label, Textarea } from '@/components/ui'
 import { ErrorPanel } from '@/components/StatusPanel'
-import { isHttpUrl, type Experiment } from '@/schemas/experiments-schema'
+import { isHttpUrl } from '@/schemas/experiments-schema'
+import { runAction } from '@/lib/actions'
 
 const FIELDS = [
   { name: 'title', label: 'Title', placeholder: 'Founder-led posts vs paid ads', long: false },
@@ -17,7 +18,8 @@ type FieldName = (typeof FIELDS)[number]['name']
 
 export default function NewExperimentPage() {
   const navigate = useNavigate()
-  const { ready, createConfirmed } = useMutations<Experiment>('experiments')
+  const { isSignedIn } = useAuth()
+  const ready = Boolean(isSignedIn)
   const [values, setValues] = useState<Record<FieldName, string>>({
     title: '',
     hypothesis: '',
@@ -37,21 +39,20 @@ export default function NewExperimentPage() {
 
     setProblem(null)
     setSaving(true)
-    try {
-      const id = await createConfirmed({
-        title,
-        hypothesis: values.hypothesis.trim(),
-        audience: values.audience.trim(),
-        successMetric: values.successMetric.trim(),
-        destinationUrl,
-        decision: 'none',
-        decisionReason: '',
-      })
-      navigate(`/experiments/${id}`)
-    } catch (error) {
-      setProblem(error instanceof Error ? error.message : 'The experiment could not be saved.')
+    // The server validates again and stamps you as the owner.
+    const result = await runAction('createExperiment', {
+      title,
+      hypothesis: values.hypothesis.trim(),
+      audience: values.audience.trim(),
+      successMetric: values.successMetric.trim(),
+      destinationUrl,
+    })
+    if (!result.success) {
+      setProblem(result.error)
       setSaving(false)
+      return
     }
+    navigate(`/experiments/${result.data.recordId}`)
   }
 
   return (

@@ -185,7 +185,7 @@ test('a member cannot queue background jobs', async ({ users }) => {
   expect(JSON.stringify(frames)).toContain('Write access denied')
 })
 
-test('a member cannot read or create click rows', async ({ users }) => {
+test('a member reads only clicks on their own experiments, and cannot create any', async ({ users }) => {
   const [user] = await users(1)
   await user.page.goto('/home')
   await expect(user.page.getByTestId('nav-user-name')).toHaveText(/\S/, { timeout: 15_000 })
@@ -206,15 +206,17 @@ test('a member cannot read or create click rows', async ({ users }) => {
       },
       { tool, input },
     )
-  // Local click rows already exist from earlier runs; experiments.spec.ts also
-  // writes one. An empty read therefore means hidden, not "none yet".
-  const read = await call('records_query', { collection: 'clicks' })
+  const me = JSON.parse((await call('user_current', {})).body).result.data
+  const myId = me?.user?.id ?? me?.id
+  // Local click rows from other accounts and the old spike exist; none may show.
+  const read = await call('records_query', { collection: 'clicks', limit: 500 })
+  expect(read.status).toBe(200)
+  const rows = JSON.parse(read.body).result.data.records as { data: { ownerId?: string } }[]
+  for (const row of rows) expect(row.data.ownerId).toBe(myId)
   const create = await call('records_create', {
     collection: 'clicks',
-    data: { variant: 'forged', clickedAt: '2026-01-01T00:00:00Z' },
+    data: { variant: 'forged', clickedAt: '2026-01-01T00:00:00Z', ownerId: myId },
   })
-  expect(read.status).toBe(200)
-  expect(JSON.parse(read.body).result.data.records).toEqual([])
   expect(create.status).toBe(422)
   expect(create.body).toContain('CREATE DENIED')
 })

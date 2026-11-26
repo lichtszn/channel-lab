@@ -2,7 +2,7 @@
  * Public click route: the ONLY public write route in this app (see CLAUDE.md).
  *
  * It looks up the variant by slug, applies the rate limits, writes one click
- * row and redirects to the experiment's destination. No paid calls, no
+ * row (variant, experiment, the experiment owner's id, time) and redirects to the experiment's destination. No paid calls, no
  * secrets, no other writes. Over a limit, or if the limiter or the write
  * fails, the visitor is still redirected but not counted.
  */
@@ -60,7 +60,12 @@ async function findLink(env: ClickEnv, slug: string) {
   if (!experiment || experiment.data.ownerId !== variant.data.ownerId) return null
   const destination = experiment.data.destinationUrl
   if (typeof destination !== 'string' || !isHttpUrl(destination)) return null
-  return { variantId: variant.recordId, destination }
+  return {
+    variantId: variant.recordId,
+    experimentId: variant.data.experimentId,
+    ownerId: experiment.data.ownerId as string,
+    destination,
+  }
 }
 
 /** Checks the IP first, so one noisy IP cannot use up the slug's allowance. */
@@ -71,10 +76,18 @@ async function underLimits(env: ClickEnv, slug: string, ip: string): Promise<boo
   return (await env.CLICK_SLUG_LIMITER.limit({ key: `${app}:slug:${slug}` })).success
 }
 
-async function writeClick(env: ClickEnv, variantId: string): Promise<void> {
+type Link = NonNullable<Awaited<ReturnType<typeof findLink>>>
+
+/** The row says which variant and experiment, whose experiment it is, and when. Nothing about the visitor. */
+async function writeClick(env: ClickEnv, link: Link): Promise<void> {
   const result = await tool(env, 'records.create', {
     collection: 'clicks',
-    data: { variant: variantId, clickedAt: new Date().toISOString() },
+    data: {
+      variant: link.variantId,
+      experimentId: link.experimentId,
+      ownerId: link.ownerId,
+      clickedAt: new Date().toISOString(),
+    },
   })
   if (!result.success) throw new Error(result.error ?? 'click write failed')
 }
@@ -84,7 +97,7 @@ export function registerClickRoute(app: Hono<AppContext>): void {
     const slug = c.req.param('slug')
     if (!SLUG_PATTERN.test(slug)) return c.text('Link not found', 404)
 
-    let link: Awaited<ReturnType<typeof findLink>>
+    let link: Link | null
     try {
       link = await findLink(c.env, slug)
     } catch (error) {
@@ -97,7 +110,7 @@ export function registerClickRoute(app: Hono<AppContext>): void {
     if (c.req.method === 'GET') {
       try {
         const ip = c.req.header('CF-Connecting-IP') ?? 'unknown'
-        if (await underLimits(c.env, slug, ip)) await writeClick(c.env, link.variantId)
+        if (await underLimits(c.env, slug, ip)) await writeClick(c.env, link)
       } catch (error) {
         console.error(`[click] not counted: ${error instanceof Error ? error.message : String(error)}`)
       }

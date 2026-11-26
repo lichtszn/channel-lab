@@ -238,3 +238,37 @@ OK to deploy. Re-run type-check, lint and tests first, deploy with GitHub as the
 **What the user changed**
 
 - (nothing recorded yet)
+
+## 2026-11-26 - Prompt 6: experiment page (live clicks, manual fields, rates, decision, rename and delete)
+
+**Prompt**
+
+On the experiment page: (1) live click counts per channel and per day without polling, through a safe path that shows only the user's own counts, labelled approximate and "not signups"; (2) hand-edited reach, outcome count and outcome label; (3) a keep/change/stop decision with a reason; (4) clicks per reach and outcomes per click, only when reach is entered, otherwise "n/a", with no significance claims; (5) rename a channel and delete one with a confirm step, without silently orphaning clicks, keeping the 2 to 4 limit in the screens; (6) if cheap, enforce valid decisions and http(s) destinations on the server. Tests: B cannot read A's click counts or edit A's channels; the decision edit; rename and delete. Run checks one file at a time, update docs, commit and push, then wait for OK before deploying.
+
+**What the agent did**
+
+- Read the realtime sync, records and server-action docs, and checked the 0.44.2 code: live subscriptions have no row cap; `writableFields` limits which fields a role may write.
+- (1) Live counts: chose "another safe path" instead of a server action, because a server action cannot push updates without polling. Click rows now also store the experiment id and the experiment owner's id, and `clicks` uses `ownerField` with read `'own'`. Each user subscribes live to their own clicks, and the server filters out everyone else's. Nothing about the visitor is stored. This changes the earlier "variant and time only" click row; the user can reverse it.
+- (2) `reach` column added to `variants`; reach, outcome count and outcome label save from each channel card.
+- (3) Decision panel saves through a new `setDecision` action.
+- (4) Rates in `src/lib/stats.ts`, unit-tested.
+- (5) Rename is a normal edit. Delete: chose blocking channels that have clicks (simpler and safer: no data is ever deleted). Clients can no longer delete channels directly; the new `deleteChannel` action checks ownership and clicks. The screen also keeps at least 2 channels.
+- (6) Done: experiments are created only through `createExperiment` (http(s) only) and decisions set only through `setDecision`. Clients may only edit title, hypothesis, audience and success metric. Nobody can delete experiments.
+- Fixed a bug found by the decision test: the panel reset itself when the saved value came back, hiding "Decision saved."
+- Tests: `tests/experiments.spec.ts` rewritten (6 tests), the member click test in `tests/collab.spec.ts` updated, new unit tests for the actions and the rate maths.
+
+**Results**
+
+- Type-check and lint clean. Unit tests 53 of 53. Browser and API tests one file at a time 23 of 23 (the flaky template test passed this run).
+- With click privacy, the delete-with-clicks rule and the experiment field lock each broken, the matching test failed at the expected line; restored, all pass.
+- Looked at a screenshot of the signed-in experiment page.
+- Not deployed.
+
+**Known gaps**
+
+- Clicks recorded before this version have no owner or experiment, so they appear in nobody's counts. That includes any manual test clicks on the live site.
+- The 2 to 4 channel limit is screen-only. Experiment details cannot be edited in a screen yet.
+
+**What the user changed**
+
+- (nothing recorded yet)

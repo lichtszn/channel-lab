@@ -15,12 +15,17 @@ export type Experiment = {
   ownerId?: string
 }
 
-/** Signed-in users (members, and admins including the app owner) see and change only their own rows. */
-export const ownRowsOnly: RolePermissions = {
+/**
+ * Experiments: signed-in users (members, and admins including the app owner)
+ * read and edit only their own. Creating, deciding and changing the destination
+ * go through server actions that validate the values; nobody can delete.
+ */
+const ownExperiments: RolePermissions = {
   read: 'own',
-  create: true,
+  create: false,
   update: 'own',
-  delete: 'own',
+  delete: false,
+  writableFields: ['title', 'hypothesis', 'audience', 'successMetric'],
 }
 
 /** Signed-out visitors (`*`) and viewers get nothing. */
@@ -64,9 +69,13 @@ export const experimentsSchema: CollectionSchema = {
   permissions: {
     '*': noAccess,
     viewer: noAccess,
-    member: ownRowsOnly,
-    admin: ownRowsOnly,
+    member: ownExperiments,
+    admin: ownExperiments,
   },
+}
+
+export function isDecision(value: unknown): value is Decision {
+  return typeof value === 'string' && (DECISIONS as readonly string[]).includes(value)
 }
 
 /** Only http(s) links may be destinations, so a link can never run script. */

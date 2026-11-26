@@ -1,5 +1,5 @@
-import type { CollectionSchema } from 'deepspace/schema'
-import { noAccess, ownerColumn, ownRowsOnly } from './experiments-schema'
+import type { CollectionSchema, RolePermissions } from 'deepspace/schema'
+import { noAccess, ownerColumn } from './experiments-schema'
 
 export type Variant = {
   experimentId: string
@@ -7,6 +7,8 @@ export type Variant = {
   slug: string
   outcomeCount: number
   outcomeLabel: string
+  /** People who could see this channel; entered by hand. Absent until entered. */
+  reach?: number | null
   /** Set by the server to the creator's user id; clients cannot choose it. */
   ownerId?: string
 }
@@ -24,6 +26,12 @@ export function newSlug(): string {
   return Array.from(bytes, (b) => SLUG_ALPHABET[b % SLUG_ALPHABET.length]).join('')
 }
 
+/**
+ * Channels: signed-in users create, read and edit only their own. Deleting goes
+ * through the deleteChannel server action, which refuses channels with clicks.
+ */
+const ownVariants: RolePermissions = { read: 'own', create: true, update: 'own', delete: false }
+
 export const variantsSchema: CollectionSchema = {
   name: 'variants',
   columns: [
@@ -32,6 +40,7 @@ export const variantsSchema: CollectionSchema = {
     { name: 'slug', storage: 'text', interpretation: 'plain', required: true, immutable: true },
     { name: 'outcomeCount', storage: 'number', interpretation: 'plain', default: 0 },
     { name: 'outcomeLabel', storage: 'text', interpretation: 'plain', default: '' },
+    { name: 'reach', storage: 'number', interpretation: 'plain' },
     ownerColumn,
   ],
   // A slug is a public link, so no two variants may share one.
@@ -40,7 +49,7 @@ export const variantsSchema: CollectionSchema = {
   permissions: {
     '*': noAccess,
     viewer: noAccess,
-    member: ownRowsOnly,
-    admin: ownRowsOnly,
+    member: ownVariants,
+    admin: ownVariants,
   },
 }

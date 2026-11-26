@@ -24,7 +24,7 @@ Sign-in stays open to anyone with Google or GitHub, so reviewers can test. Prote
 
 1. validates the slug and looks up a real variant (`src/server/click-route.ts`); unknown slugs get 404,
 2. applies rate limits: 10 per minute per IP and 120 per minute per slug,
-3. writes one click row, only if under both limits,
+3. writes one click row, only if under both limits: variant id, experiment id, the experiment owner's user id, and the time. Nothing about the visitor,
 4. redirects to the variant's experiment destination, even when over a limit.
 
 A variant only works if its owner also owns the experiment, and only http(s) destinations redirect.
@@ -37,11 +37,14 @@ The 128 rows on the test variant `spike-test` are test data. Do not delete them.
 
 ## Data and permissions
 
-- `experiments` and `variants`: each user sees and changes only their own rows. That includes admins and the app owner.
+- `experiments`: each user reads and edits only their own (admins and the app owner too). Clients may only edit `title`, `hypothesis`, `audience`, `successMetric` (`writableFields`). Creating goes through the `createExperiment` action (http(s) destination only) and decisions through `setDecision` (none/keep/change/stop only). Nobody can delete.
+- `variants`: each user creates, reads and edits only their own. Deleting goes only through the `deleteChannel` action, which refuses channels with clicks so click data is never orphaned.
 - Ownership uses `ownerField: 'ownerId'` on a column marked `userBound` and `immutable`, as the docs say. Never let clients set it.
 - `variants.slug` is unique (`uniqueOn`) and immutable, because shared links must not change. `experimentId` is immutable.
-- `clicks`: only the click route writes them; only admins can read them. Click rows store the variant id and the time.
-- The 2 to 4 channels per experiment and the http(s) check on the form are enforced in the UI only. The click route checks http(s) again.
+- `clicks`: only the click route writes them. Each user reads only clicks on their own experiments (`ownerField: 'ownerId'`, set by the route to the experiment owner; not `userBound`, because no client creates clicks). Clicks from before 2026-11-26 lack `ownerId` and `experimentId` and are visible to nobody.
+- Server actions run with permissions off: every action must load the row and check `ownerId === userId` first (see `loadOwn` in `src/actions/index.ts`).
+- The 2 to 4 channels per experiment is enforced in the UI only.
+- Click counts on screen must say they are approximate and that a click is not a signup. Rates are plain ratios: never claim statistical significance.
 - Keep `src/schemas/schemas.test.ts` passing: every schema must have no schema-lint warnings.
 
 No paid calls, no secrets, no other writes. Do not add other public write routes.
