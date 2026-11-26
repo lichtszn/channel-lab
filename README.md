@@ -20,7 +20,6 @@ Not built yet: editing outcomes and decisions, live click counts, the AI readout
 - **Clicks:** only the click link writes them, and only the app owner can read them for now. A click stores which channel and when, never an IP address.
 - **Signed-out visitors** see only the landing page and can follow tracked links.
 
-The 2 to 4 channel limit is enforced in the screens only.
 
 ## Known limitations
 
@@ -30,6 +29,14 @@ The 2 to 4 channel limit is enforced in the screens only.
 - The per-slug limit has only been tested locally, where it was exact. It was not reached in the live tests.
 
 **Test data.** The live `clicks` table holds 128 rows from those tests. They are on the test variant `spike-test` and are not real visitors. That slug is no longer a working link.
+
+**Checks that run in the screens only.** The server does not enforce these, so someone calling the data API directly could bypass them:
+
+- the 2 to 4 channels per experiment;
+- the create form's check that the destination is an `http://` or `https://` link (the click link checks this again and refuses anything else);
+- the allowed decision values (keep, change, stop, none).
+
+**Flaky template test.** The scaffold's test "API status page renders loading success and error states" (`tests/collab.spec.ts`) fails intermittently: run alone on 2026-11-25 it passed 1 of 3 times, and it failed the same way before any Channel Lab code existed. It waits for a loading message that is shown for only 100 ms. It is left unchanged.
 
 ## What I'd do next
 
