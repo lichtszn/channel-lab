@@ -392,3 +392,10 @@ The user cannot spend real money. No live paid call and no test call. Without ca
 **What the user changed**
 
 - Rejected the agent's choice of `claude-opus-5-5` and live readouts: no spending, readout off by default, cheapest model, lower caps.
+
+**Deploy and live check (2026-11-26 06:52 UTC)**
+
+- Release `rel_01M8BA1DRSRHJSMNWR0X2RWAMJ` from `c3adcaa` (GitHub source, clean tree). The production secrets store is empty, so the readout is off.
+- Signed out: landing page 200, Sign in leads to the sign-in screen, unknown `/go/` slugs 404, `generateReadout` and `readoutSettings` 401, no cookies, no console errors.
+- As the owner (free calls only): `readoutSettings` returned `enabled: false`, caps 3 and 10; `generateReadout` with a made-up experiment id returned `readout_off` with the user's message.
+- Credits: 499.978 remaining (0.0215 used). That is up from 0.0147 earlier the same day, with still no integration usage. Something small and not itemized is being metered (about US$0.00007 more), possibly deploys or requests; the source was not found.
