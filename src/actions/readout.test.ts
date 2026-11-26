@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ActionContext, ActionTools } from 'deepspace/worker'
 import type { Env } from '../../worker'
-import { APP_DAILY_READOUTS, makeGenerateReadout, USER_DAILY_READOUTS, type ModelCall } from './readout'
+import { APP_DAILY_READOUTS, makeGenerateReadout, READOUT_OFF_MESSAGE, readoutSettings, USER_DAILY_READOUTS, type ModelCall } from './readout'
 
 type Row = { recordId: string; data: Record<string, unknown> }
 let db: Record<string, Row[]>
@@ -51,7 +51,8 @@ const realCall = () => (async (system: string, user: string) => {
   return reply
 }) as ModelCall
 const generate = makeGenerateReadout(realCall)
-const run = (userId: string, params: Record<string, unknown> = { experimentId: `exp-${userId}` }, env: Partial<Env> = {}) =>
+const ON: Partial<Env> = { READOUT_ENABLED: 'true' }
+const run = (userId: string, params: Record<string, unknown> = { experimentId: `exp-${userId}` }, env: Partial<Env> = ON) =>
   generate({ userId, params, tools, env: env as Env, callerJwt: 'x' } as ActionContext<Env>)
 
 function seedUser(userId: string) {
@@ -107,26 +108,28 @@ describe('generateReadout', () => {
     expect((r as any).data.data.channels.map((c: any) => [c.channel, c.clicks])).toEqual([['iMessage', 19], ['LinkedIn', 4]])
   })
 
-  it('caps each user at 5 per day', async () => {
-    for (let i = 1; i <= 5; i++) expect(await run('alice')).toMatchObject({ success: true, data: { used: i } })
+  it('caps each user at 3 per day', async () => {
+    expect(USER_DAILY_READOUTS).toBe(3)
+    for (let i = 1; i <= 3; i++) expect(await run('alice')).toMatchObject({ success: true, data: { used: i } })
     expect(await run('alice')).toMatchObject({ success: false, code: 'user_cap' })
-    expect(modelCalls).toHaveLength(5)
+    expect(modelCalls).toHaveLength(3)
   })
 
-  it('allows exactly 5 out of 20 simultaneous requests from one user', async () => {
+  it('allows exactly 3 out of 20 simultaneous requests from one user', async () => {
     const results = await Promise.all(Array.from({ length: 20 }, () => run('alice')))
-    expect(results.filter((r) => r.success)).toHaveLength(5)
-    expect(results.filter((r) => !r.success && (r as any).code === 'user_cap')).toHaveLength(15)
-    expect(modelCalls).toHaveLength(5)
-    expect(db.readout_usage.filter((r) => r.data.scope === 'user:alice').map((r) => r.data.slot).sort()).toEqual([1, 2, 3, 4, 5])
+    expect(results.filter((r) => r.success)).toHaveLength(3)
+    expect(results.filter((r) => !r.success && (r as any).code === 'user_cap')).toHaveLength(17)
+    expect(modelCalls).toHaveLength(3)
+    expect(db.readout_usage.filter((r) => r.data.scope === 'user:alice').map((r) => r.data.slot).sort()).toEqual([1, 2, 3])
   })
 
-  it('caps the app at 50 per day across users, even when they race, and frees the user slot', async () => {
-    const users = Array.from({ length: 12 }, (_, i) => `u${i}`)
+  it('caps the app at 10 per day across users, even when they race, and frees the user slot', async () => {
+    expect(APP_DAILY_READOUTS).toBe(10)
+    const users = Array.from({ length: 6 }, (_, i) => `u${i}`)
     users.forEach(seedUser)
-    const results = await Promise.all(users.flatMap((u) => Array.from({ length: 5 }, () => run(u))))
+    const results = await Promise.all(users.flatMap((u) => Array.from({ length: 3 }, () => run(u))))
     expect(results.filter((r) => r.success)).toHaveLength(APP_DAILY_READOUTS)
-    expect(results.filter((r) => !r.success && (r as any).code === 'app_cap')).toHaveLength(60 - APP_DAILY_READOUTS)
+    expect(results.filter((r) => !r.success && (r as any).code === 'app_cap')).toHaveLength(18 - APP_DAILY_READOUTS)
     expect(modelCalls).toHaveLength(APP_DAILY_READOUTS)
     // Refused requests gave their user slot back.
     expect(db.readout_usage.filter((r) => r.data.scope !== 'app')).toHaveLength(APP_DAILY_READOUTS)
@@ -135,7 +138,7 @@ describe('generateReadout', () => {
   it('a new UTC day starts fresh', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-11-26T23:59:00Z'))
-    for (let i = 0; i < 5; i++) await run('alice')
+    for (let i = 0; i < 3; i++) await run('alice')
     expect(await run('alice')).toMatchObject({ code: 'user_cap' })
     vi.setSystemTime(new Date('2026-11-27T00:00:30Z'))
     expect(await run('alice')).toMatchObject({ success: true, data: { used: 1 } })
@@ -157,11 +160,36 @@ describe('generateReadout', () => {
   })
 
   it('uses the fake model only when debug routes are on AND the request asks', async () => {
-    expect(await run('alice', { experimentId: 'exp-alice', fakeModel: true })).toMatchObject({ success: true, data: { model: 'claude-opus-5-5' } })
+    expect(await run('alice', { experimentId: 'exp-alice', fakeModel: true })).toMatchObject({ success: true, data: { model: 'claude-haiku-5-5' } })
     expect(modelCalls).toHaveLength(1)
-    const fake = await run('alice', { experimentId: 'exp-alice', fakeModel: true }, { ALLOW_DEBUG_ROUTES: 'true' })
+    const fake = await run('alice', { experimentId: 'exp-alice', fakeModel: true }, { ...ON, ALLOW_DEBUG_ROUTES: 'true' })
     expect(fake).toMatchObject({ success: true, data: { model: 'fake' } })
     expect(modelCalls).toHaveLength(1)
+  })
+
+  it('is off unless READOUT_ENABLED is "true": nothing is claimed or called', async () => {
+    for (const env of [{}, { READOUT_ENABLED: 'false' }, { READOUT_ENABLED: 'TRUE' }, { READOUT_ENABLED: '1' }] as Partial<Env>[]) {
+      expect(await run('alice', { experimentId: 'exp-alice' }, env)).toEqual({ success: false, error: READOUT_OFF_MESSAGE, code: 'readout_off' })
+      // Asking for the fake model without debug routes does not get around it.
+      expect(await run('alice', { experimentId: 'exp-alice', fakeModel: true }, env)).toMatchObject({ code: 'readout_off' })
+    }
+    expect(modelCalls).toHaveLength(0)
+    expect(db.readout_usage).toHaveLength(0)
+  })
+
+  it('local tests can use the fake model while the switch is off', async () => {
+    const r = await run('alice', { experimentId: 'exp-alice', fakeModel: true }, { ALLOW_DEBUG_ROUTES: 'true' })
+    expect(r).toMatchObject({ success: true, data: { model: 'fake' } })
+    expect(modelCalls).toHaveLength(0)
+  })
+
+  it('reports the switch and caps to the screen', async () => {
+    const settings = (env: Partial<Env>, params: Record<string, unknown> = {}) =>
+      readoutSettings({ userId: 'alice', params, tools, env: env as Env, callerJwt: 'x' } as ActionContext<Env>)
+    expect(await settings({})).toEqual({ success: true, data: { enabled: false, userLimit: 3, appLimit: 10, offMessage: READOUT_OFF_MESSAGE } })
+    expect(await settings(ON)).toMatchObject({ data: { enabled: true } })
+    expect(await settings({}, { fakeModel: true })).toMatchObject({ data: { enabled: false } })
+    expect(await settings({ ALLOW_DEBUG_ROUTES: 'true' }, { fakeModel: true })).toMatchObject({ data: { enabled: true } })
   })
 
   it('refuses an experiment with no channels without spending', async () => {

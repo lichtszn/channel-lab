@@ -30,12 +30,38 @@ Status: early. Live at https://channel-lab.app.space. Source: https://github.com
 
 ## AI readout
 
+**It is switched OFF in production by default, to avoid cost.** The button is disabled and says: "AI readout is switched off to avoid cost. It is fully built and tested with a fake model." The server refuses too, before claiming a cap slot or calling anything.
+
 - **Who:** only the signed-in owner of the experiment. The app owner pays (`billing: 'developer'`).
-- **Caps:** 5 readouts per person and 50 for the whole app per UTC day. Each request claims a numbered slot (1 to 5 per person, 1 to 50 for the app) in a `readout_usage` table that refuses duplicates (`uniqueOn`), before any paid call. This was tested with 8 simultaneous requests against the real local database: exactly 5 succeeded. A slot is used even when the AI fails or its memo is rejected, because the call was already paid for.
-- **What the AI sees:** only, per channel, clicks, reach, outcome count and outcome label, plus the hypothesis and success metric. Model: `claude-opus-5-5` through the platform's `anthropic/chat-completion`.
-- **Number check:** every number in the memo must appear in that data, the memo must say click counts are approximate, name a channel, and not claim statistical significance. If not, you get an error and a "Try again" button instead of the memo. The check is strict, so a valid memo that happens to write a date or a computed percentage is rejected and uses a slot.
+- **Caps:** 3 readouts per person and 10 for the whole app per UTC day. Each request claims a numbered slot (1 to 3 per person, 1 to 10 for the app) in a `readout_usage` table that refuses duplicates (`uniqueOn`), before any paid call. Tested with 8 simultaneous requests against the real local database: exactly 3 succeeded. A slot is used even when the AI fails or its memo is rejected, because the call was already paid for.
+- **Model:** `claude-haiku-5-5`, the cheapest suitable model, through the platform's `anthropic/chat-completion` (temperature 0, at most 700 output tokens).
+- **What the AI sees:** only, per channel, clicks, reach, outcome count and outcome label, plus the hypothesis and success metric.
+- **Number check:** every number in the memo must appear in that data, and the memo must say click counts are approximate, name a channel, and not claim statistical significance. If not, you get an error and a "Try again" button instead of the memo. The check is strict, so a valid memo that writes a date or a computed percentage is rejected and uses a slot.
 - **Not saved:** a readout is shown once; reloading the page clears it.
-- **Testing:** tests never call the AI. A fake model is used, and only works where `ALLOW_DEBUG_ROUTES` is on (local development).
+- **Testing:** tests never call the AI. A fake model is used, and only works where `ALLOW_DEBUG_ROUTES` is on (local development). No real readout has ever been generated, so the reply format of the live AI service is untested.
+
+### Turning it on or off
+
+The switch is a DeepSpace secret, not code. It takes effect at the next deploy:
+
+```bash
+npx deepspace secrets set READOUT_ENABLED=true   # on
+npx deepspace deploy
+```
+
+```bash
+npx deepspace secrets delete READOUT_ENABLED     # off (the default)
+npx deepspace deploy
+```
+
+Only the exact value `true` turns it on.
+
+### What it costs (checked 2026-11-26, without making any paid call)
+
+- **Price per readout:** DeepSpace does not publish a fixed price. The catalog (`npx deepspace integrations info anthropic/chat-completion`) bills "the provider's actual cost plus a platform markup", varying with input size, and says free-tier pricing differs from paid-tier pricing except for `claude-haiku-5-5`, which gets standard pricing. Each readout sends one short prompt and gets up to 700 tokens back. The real cost would only be known from `npx deepspace app usage` after a first call.
+- **Your balance:** free plan, 500 credits (100 credits = US$1, so US$5). `app usage` showed 499.985 remaining: about 0.015 credits (roughly US$0.00015) used, not itemized and not from any integration. No credits purchased, no renewal date shown, no integration usage in the last 30 days.
+- **What else is billed:** the docs and the usage report list charges only for integration calls (AI, email and similar). No hosting, deploy or record charges appear. The free plan's limits are quotas, not charges: a cap on active apps and 128 MiB of file storage.
+- **If credits run out:** paid calls fail with an `insufficient_credits` error until the account is topped up; the readout would show its error and retry message. With no card or purchased credits, nothing can be charged beyond the balance.
 
 ## Known limitations
 
@@ -52,7 +78,7 @@ Status: early. Live at https://channel-lab.app.space. Source: https://github.com
 
 **Live click counts load every click row.** The experiment page subscribes to all of an experiment's click rows and counts them in the browser. That is fine for a small team, but would get slow with very many clicks.
 
-**Flaky template test.** The scaffold's test "API status page renders loading success and error states" (`tests/collab.spec.ts`) fails intermittently: run alone on 2026-11-25 it passed 1 of 3 times, and it failed the same way before any Channel Lab code existed. It waits for a loading message that is shown for only 100 ms. It is left unchanged.
+**Template test fixed (2026-11-26).** The scaffold's test "API status page renders loading success and error states" (`tests/collab.spec.ts`) used to fail intermittently, then every time: its fake catalog answered after 100 ms, and on this machine the page had already left the loading state before the test looked. The fake answer now waits until the test has seen the loading state, so the same states are checked without the race.
 
 ## What I'd do next
 
@@ -61,4 +87,5 @@ Status: early. Live at https://channel-lab.app.space. Source: https://github.com
 - Enforce the 2 to 4 channel limit on the server.
 - Let users edit an experiment's title, hypothesis, audience, success metric and destination.
 - Save readouts so they survive a reload, and show how many are left today.
+- Measure the real cost of one readout (it is off until then) before deciding whether to turn it on.
 - Build the weekly email digest.

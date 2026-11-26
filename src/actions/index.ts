@@ -6,7 +6,7 @@
 import type { ActionHandler, ActionResult, ActionTools } from 'deepspace/worker'
 import type { Env } from '../../worker'
 import { isDecision, isHttpUrl } from '../schemas/experiments-schema'
-import { generateReadout } from './readout'
+import { generateReadout, readoutSettings } from './readout'
 
 const MAX_TEXT = 2000
 
@@ -84,4 +84,5 @@ export const actions: Record<string, ActionHandler<Env>> = {
   setDecision,
   deleteChannel,
   generateReadout,
+  readoutSettings,
 }

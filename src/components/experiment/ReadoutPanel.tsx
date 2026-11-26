@@ -1,14 +1,25 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui'
 import { runAction } from '@/lib/actions'
 import type { ReadoutData } from '@/lib/readout'
 
 type Readout = { memo: string; data: ReadoutData; model: string; used: number; limit: number }
+type Settings = { enabled: boolean; userLimit: number; appLimit: number; offMessage: string }
 type State = { kind: 'idle' } | { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'done'; readout: Readout }
 
 /** "Generate readout": calls the generateReadout server action and shows the checked memo beside the numbers it used. */
 export function ReadoutPanel({ experimentId, channelCount }: { experimentId: string; channelCount: number }) {
   const [state, setState] = useState<State>({ kind: 'idle' })
+  // Whether the owner has switched the readout on (it is off by default, to avoid cost).
+  const [settings, setSettings] = useState<Settings | 'loading' | 'error'>('loading')
+  useEffect(() => {
+    let live = true
+    runAction<Settings>('readoutSettings', {}).then((r) => live && setSettings(r.success ? r.data : 'error'))
+    return () => {
+      live = false
+    }
+  }, [])
+  const off = settings !== 'loading' && (settings === 'error' || !settings.enabled)
 
   async function generate() {
     setState({ kind: 'loading' })
@@ -22,13 +33,21 @@ export function ReadoutPanel({ experimentId, channelCount }: { experimentId: str
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">AI readout</h2>
-          <p className="text-xs text-muted-foreground">Up to 5 per person per day (UTC). Uses only the numbers shown with it.</p>
+          <p className="text-xs text-muted-foreground">
+            {typeof settings === 'object' ? `Up to ${settings.userLimit} per person per day (UTC). ` : ''}Uses only the numbers shown with it.
+          </p>
         </div>
-        <Button type="button" onClick={generate} disabled={loading || channelCount === 0} aria-busy={loading}>
+        <Button type="button" onClick={generate} disabled={loading || off || settings === 'loading' || channelCount === 0} aria-busy={loading}>
           {loading ? 'Generating…' : state.kind === 'done' ? 'Generate again' : 'Generate readout'}
         </Button>
       </div>
 
+      {settings === 'error' && (
+        <p role="alert" className="mt-3 text-sm text-muted-foreground">Could not check whether the AI readout is on. Reload the page to try again.</p>
+      )}
+      {typeof settings === 'object' && !settings.enabled && (
+        <p data-testid="readout-off" className="mt-3 rounded-md bg-secondary px-3 py-2 text-sm text-secondary-foreground">{settings.offMessage}</p>
+      )}
       {channelCount === 0 && <p className="mt-3 text-sm text-muted-foreground">Add a channel first.</p>}
       {loading && <p role="status" className="mt-4 text-sm text-muted-foreground">Writing the readout. This can take a few seconds…</p>}
 

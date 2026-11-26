@@ -5,6 +5,9 @@
  * THEN call the model, then check every number in the memo against the data.
  * A slot is used even if the model fails or the memo is rejected: a paid call
  * was made either way.
+ *
+ * OFF by default: the readout runs for real only when the DeepSpace secret
+ * READOUT_ENABLED is "true" (see README). Off, nothing is claimed or called.
  */
 import type { ActionHandler, ActionTools } from 'deepspace/worker'
 import type { Env } from '../../worker'
@@ -17,9 +20,22 @@ import {
   type ReadoutData,
 } from '../lib/readout'
 
-export const USER_DAILY_READOUTS = 5
-export const APP_DAILY_READOUTS = 50
-export const READOUT_MODEL = 'claude-opus-5-5'
+export const USER_DAILY_READOUTS = 3
+export const APP_DAILY_READOUTS = 10
+/** The cheapest suitable model in the catalog. */
+export const READOUT_MODEL = 'claude-haiku-5-5'
+export const READOUT_OFF_MESSAGE =
+  'AI readout is switched off to avoid cost. It is fully built and tested with a fake model.'
+
+/** True only when the owner has set the READOUT_ENABLED secret to "true". */
+export function readoutEnabled(env: Pick<Env, 'READOUT_ENABLED'>): boolean {
+  return env.READOUT_ENABLED === 'true'
+}
+
+/** Local tests only: fake model, honoured only when debug routes are on. */
+function isTestMode(env: Pick<Env, 'ALLOW_DEBUG_ROUTES'>, params: Record<string, unknown>): boolean {
+  return env.ALLOW_DEBUG_ROUTES === 'true' && params.fakeModel === true
+}
 export const READOUT_ENDPOINT = 'anthropic/chat-completion'
 
 type Row = { recordId: string; data: Record<string, unknown> }
@@ -107,6 +123,10 @@ function fakeCall(data: ReadoutData, memo?: string): ModelCall {
 
 export function makeGenerateReadout(realCall: (tools: ActionTools) => ModelCall): ActionHandler<Env> {
   return async ({ params, tools, userId, env }) => {
+    const testMode = isTestMode(env, params)
+    // The production switch: off means no slot is claimed and nothing is called.
+    if (!readoutEnabled(env) && !testMode) return { success: false, error: READOUT_OFF_MESSAGE, code: 'readout_off' }
+
     const experimentId = params.experimentId
     if (typeof experimentId !== 'string' || !experimentId) return { success: false, error: 'Not found' }
     const found = await tools.get('experiments', experimentId)
@@ -121,7 +141,6 @@ export function makeGenerateReadout(realCall: (tools: ActionTools) => ModelCall)
     }
     if (data.channels.length === 0) return { success: false, error: 'Add at least one channel first.' }
 
-    const testMode = env.ALLOW_DEBUG_ROUTES === 'true' && params.fakeModel === true
     const day = testMode && typeof params.testDay === 'string' ? params.testDay : utcDay()
 
     // Claim the caps before spending anything. Release the user slot if the app is full.
@@ -161,3 +180,14 @@ export function makeGenerateReadout(realCall: (tools: ActionTools) => ModelCall)
 }
 
 export const generateReadout = makeGenerateReadout(anthropicCall)
+
+/** Tells the screen whether the readout is on, and the caps. Free: no model call. */
+export const readoutSettings: ActionHandler<Env> = async ({ params, env }) => ({
+  success: true,
+  data: {
+    enabled: readoutEnabled(env) || isTestMode(env, params),
+    userLimit: USER_DAILY_READOUTS,
+    appLimit: APP_DAILY_READOUTS,
+    offMessage: READOUT_OFF_MESSAGE,
+  },
+})

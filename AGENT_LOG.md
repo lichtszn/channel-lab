@@ -367,3 +367,28 @@ Read the AI chat and external-API docs and check integration names. Add a "Gener
 **What the user changed**
 
 - (nothing recorded yet)
+
+## 2026-11-26 - Cost rule: readout off by default, cheaper model, lower caps
+
+**Prompt**
+
+The user cannot spend real money. No live paid call and no test call. Without calling anything, report the cheapest suitable model's per-call price, the credit balance, what in the app is billed, and what happens when credits run out. Add a production switch, default OFF and not in code, that disables Generate readout with the message "AI readout is switched off to avoid cost. It is fully built and tested with a fake model." Switch to the cheapest suitable model; caps 3 per user and 10 per app. Keep tests on the fake model. Update README with the tradeoff, cost facts and how to turn it on. Then one fully clean test run, deploy, check the live site signed out, commit, push, stop.
+
+**Cost facts (read-only; no paid call)**
+
+- `npx deepspace integrations info anthropic/chat-completion --json`: billing `per_actual_cost` (provider cost plus platform markup), `baseCost: null`, varies with input, free-tier price differs except that `claude-haiku-5-5` gets standard pricing. No fixed per-call price is published.
+- `npx deepspace app usage --json`: plan free, allocation 500 credits (US$5), 499.985 remaining (about 0.015 credits used, not itemized), purchased 0, renews never shown, no integration usage.
+- Docs: charges are listed only for integration calls; the free plan has quotas (active apps, 128 MiB files), not hosting or record charges. When credits run out, paid calls fail with `insufficient_credits` until topped up.
+
+**What the agent did**
+
+- Switch: DeepSpace secret `READOUT_ENABLED`; only the exact value "true" turns the readout on. Off (the default), `generateReadout` refuses before claiming a slot or calling anything, and a free `readoutSettings` action tells the screen, which disables the button and shows the user's message. Local tests still use the fake model (`ALLOW_DEBUG_ROUTES` plus `fakeModel`), which works with the switch off.
+- Model `claude-haiku-5-5`; caps 3 per user and 10 per app per UTC day.
+- Tests: unit tests for the switch (unset, "false", "TRUE", "1" all off, nothing claimed or called) and the settings action; caps updated (20 racing from one user give exactly 3; 18 racing across 6 users give exactly 10); a browser test that the default-off screen shows the message and the server refuses; 8 simultaneous readouts on the real local database give exactly 3.
+- First tries at one clean run failed: twice only on the template "API status page" test, which by then failed every time, even alone; once because the dev server did not start within 60 seconds. Its failure snapshot showed the page had already finished loading: the test's fake catalog answered after a fixed 100 ms, and the test missed that loading window. Fixed in `tests/collab.spec.ts`: the fake answer now waits until the test has seen the loading state. It then passed 3 of 3 alone.
+- One fully clean run: type-check, lint, unit tests 78 of 78, browser tests 27 of 27.
+- README and CLAUDE.md updated (switch, cost facts, how to turn it on, the no-spend rule).
+
+**What the user changed**
+
+- Rejected the agent's choice of `claude-opus-5-5` and live readouts: no spending, readout off by default, cheapest model, lower caps.

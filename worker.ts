@@ -121,6 +121,8 @@ export interface Env extends DOBindings<typeof __DO_MANIFEST__> {
   /** Click limits for /go/:slug: 10/min per IP and 120/min per slug (wrangler.toml). */
   CLICK_IP_LIMITER: RateLimit
   CLICK_SLUG_LIMITER: RateLimit
+  /** AI readout switch (DeepSpace secret). Unset or anything but "true" = off. */
+  READOUT_ENABLED?: string
 }
 
 export type AppContext = { Bindings: Env }

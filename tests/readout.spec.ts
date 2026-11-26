@@ -2,6 +2,7 @@
  * AI readout against the real local record room. NO PAID CALLS: every request
  * sets `fakeModel: true`, which the action honours only when ALLOW_DEBUG_ROUTES
  * is "true" (local dev and tests). `testDay` gives each run its own cap window.
+ * Locally the READOUT_ENABLED switch is unset, i.e. OFF, as in production by default.
  */
 import { test, expect, loadAllTestAccounts } from 'deepspace/testing'
 import type { Page } from '@playwright/test'
@@ -61,16 +62,16 @@ test('only the owner can generate a readout', async ({ users }) => {
   ])
 })
 
-test('the real record room allows exactly 5 of 8 simultaneous readouts', async ({ users }) => {
+test('the real record room allows exactly 3 of 8 simultaneous readouts', async ({ users }) => {
   const [a] = await users(1)
   const expId = await setup(a.page)
   const day = testDay()
   const results = await Promise.all(
     Array.from({ length: 8 }, () => call(a.page, '/api/actions/generateReadout', { experimentId: expId, fakeModel: true, testDay: day })),
   )
-  expect(results.filter((r) => r.success)).toHaveLength(5)
-  expect(results.filter((r) => r.code === 'user_cap')).toHaveLength(3)
-  expect(results.filter((r) => r.success).map((r) => r.data.used).sort()).toEqual([1, 2, 3, 4, 5])
+  expect(results.filter((r) => r.success)).toHaveLength(3)
+  expect(results.filter((r) => r.code === 'user_cap')).toHaveLength(5)
+  expect(results.filter((r) => r.success).map((r) => r.data.used).sort()).toEqual([1, 2, 3])
 })
 
 test('the button shows loading, then the memo beside its numbers; a bad memo shows an error and retry', async ({ users }) => {
@@ -79,7 +80,11 @@ test('the button shows loading, then the memo beside its numbers; a bad memo sho
   const expId = await setup(page)
   const day = testDay()
   let fakeMemo: string | undefined = 'iMessage leads with 19 clicks, approximate counts, small sample, not significant. Next test LinkedIn.'
-  // Test-only: steer the real action to the fake model, and slow it so the loading state is visible.
+  // Test-only: steer the real actions to the fake model (which also reports the readout as on),
+  // and slow generation so the loading state is visible.
+  await page.route('**/api/actions/readoutSettings', async (route) => {
+    await route.continue({ postData: JSON.stringify({ fakeModel: true }) })
+  })
   await page.route('**/api/actions/generateReadout', async (route) => {
     const body = { ...JSON.parse(route.request().postData() ?? '{}'), fakeModel: true, testDay: day, ...(fakeMemo ? { fakeMemo } : {}) }
     await new Promise((r) => setTimeout(r, 400))
@@ -103,4 +108,18 @@ test('the button shows loading, then the memo beside its numbers; a bad memo sho
   await expect(page.getByTestId('readout-numbers')).toContainText('40')
   await expect(page.getByTestId('readout-error')).toHaveCount(0)
   await expect(panel.getByRole('button', { name: 'Generate again' })).toBeEnabled()
+})
+
+test('with the switch off (the default), the button is disabled and says why', async ({ users }) => {
+  const [a] = await users(1)
+  const expId = await setup(a.page)
+  await a.page.goto(`/experiments/${expId}`)
+  const panel = a.page.getByTestId('readout-panel')
+  await expect(panel.getByTestId('readout-off')).toHaveText(
+    'AI readout is switched off to avoid cost. It is fully built and tested with a fake model.',
+    { timeout: 15_000 },
+  )
+  await expect(panel.getByRole('button', { name: 'Generate readout' })).toBeDisabled()
+  // The server refuses too, before any slot or model call.
+  expect(await call(a.page, '/api/actions/generateReadout', { experimentId: expId })).toMatchObject({ success: false, code: 'readout_off' })
 })

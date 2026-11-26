@@ -52,9 +52,11 @@ No paid calls, no secrets, no other writes. Do not add other public write routes
 ## AI, email and caps
 
 - The app owner pays for AI and email (`billing: 'developer'`).
-- Readouts: 5 per user per day, and an app-wide cap of 50 per day. Days reset at midnight UTC.
+- The user cannot spend real money on this app. Never make a live paid call, test call or `integrations invoke`.
+- The AI readout is OFF unless the DeepSpace secret `READOUT_ENABLED` is exactly "true". Never set it; only the user may.
+- Readouts: 3 per user per day, and an app-wide cap of 10 per day. Days reset at midnight UTC.
 - Caps use the `uniqueOn` approach, tested under concurrent requests: `readout_usage` rows (scope, day, slot), claimed in `src/actions/readout.ts` BEFORE the paid call. A slot is spent even if the model fails or its memo is rejected.
-- The readout (`generateReadout`, model `claude-opus-5-5` via `anthropic/chat-completion`) sends the model ONLY: per channel clicks, reach, outcome count and label, plus the hypothesis and success metric. Never titles, ids, slugs, URLs or user data.
+- The readout (`generateReadout`, model `claude-haiku-5-5` (the cheapest suitable) via `anthropic/chat-completion`) sends the model ONLY: per channel clicks, reach, outcome count and label, plus the hypothesis and success metric. Never titles, ids, slugs, URLs or user data.
 - Every number in a memo must appear in the data sent (`checkMemo` in `src/lib/readout.ts`), and the memo must say counts are approximate, name a channel, and not claim significance. Otherwise show an error, never the memo.
 - Tests must never make paid calls: use `fakeModel: true`, which works only when `ALLOW_DEBUG_ROUTES` is "true" (local). Never set `ALLOW_DEBUG_ROUTES` in production secrets.
 - Cron may make paid calls: one digest per owner per week. Each digest counts as 1 of the 50.

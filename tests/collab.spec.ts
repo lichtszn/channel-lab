@@ -66,6 +66,10 @@ test('API status page renders loading success and error states', async ({ users 
   const [user] = await users(1)
   let shouldFail = false
   let requestCount = 0
+  // Hold the first catalog reply until the test has seen the loading state.
+  // (It used to reply after a fixed 100 ms, which a slow machine could miss.)
+  let releaseFirstReply!: () => void
+  const firstReplyReleased = new Promise<void>((resolve) => (releaseFirstReply = resolve))
 
   await user.page.route('**/api/integrations', async (route) => {
     requestCount += 1
@@ -78,7 +82,7 @@ test('API status page renders loading success and error states', async ({ users 
       return
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await firstReplyReleased
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -88,6 +92,7 @@ test('API status page renders loading success and error states', async ({ users 
 
   await user.page.goto('/api-status')
   await expect(user.page.getByText('Loading integration catalog...')).toBeVisible()
+  releaseFirstReply()
   await expect(user.page.getByText('Integration catalog ready')).toBeVisible()
   await expect(user.page.getByText('2 integrations available.')).toBeVisible()
 
