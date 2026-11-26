@@ -31,12 +31,12 @@ Status: early. Live at https://channel-lab.app.space. Source: https://github.com
 
 **Click counts are approximate.** The public link `/go/:slug` uses Cloudflare's rate limiter as a coarse abuse filter (10 clicks per minute per IP, 120 per minute per slug). Clicks over a limit still redirect but are not counted. A click is not a signup.
 
-- The per-IP limit is leaky on the live site. In tests on 2026-11-25 from one IP, it counted 40 of 40 clicks in a 2-second parallel burst, 11 of 40 on one reused connection, 50 of 50 over 41 seconds, and 26 of 200 in a 13-second burst. One visitor can inflate a count.
+- The per-IP limit is leaky on the live site. In tests on 2026-11-25 from one IP, it counted 40 of 40 clicks in a 2-second parallel burst, 11 of 40 on one reused connection, 50 of 50 over 41 seconds, and 130 of 200 in a 13-second burst. One visitor can inflate a count. (An earlier version of this note said 26 of 200 for the last burst; that read was cut off by a page-size limit.)
 - The per-slug limit has only been tested locally, where it was exact. It was not reached in the live tests.
 
-**Older clicks are not counted.** Clicks recorded before this version do not say which experiment or owner they belong to, so they do not appear in anyone's counts. That includes any click from manual testing on the earlier version.
+**Older clicks are not counted.** Clicks recorded before 2026-11-26 05:53 UTC do not say which experiment or owner they belong to, so they appear in nobody's counts. Counted just before that deploy, the owner's live experiment had 33 such clicks: iMessage 19, Class Groupchat 7, LinkedIn 4, Instagram Story 3. A click in the 31 seconds between that count and the deploy would not be in those numbers. The rows can't be changed in place (their experiment and owner columns are immutable), so including them would need a one-off migration that has not been run.
 
-**Test data.** The live `clicks` table holds 128 rows from the click tests. They are on the test variant `spike-test` and are not real visitors. That slug is no longer a working link.
+**Test data.** The live `clicks` table holds 232 rows from the click tests (earlier notes said 128; that count was cut off by a page-size limit). They are on the test variant `spike-test` and are not real visitors. That slug is no longer a working link.
 
 **Checks that run in the screens only.** The 2 to 4 channels per experiment is enforced in the screens; the server would accept more.
 

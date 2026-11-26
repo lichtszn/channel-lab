@@ -272,3 +272,26 @@ On the experiment page: (1) live click counts per channel and per day without po
 **What the user changed**
 
 - (nothing recorded yet)
+
+## 2026-11-26 - Deploy of Prompt 6, and counting old clicks
+
+**Prompt**
+
+OK to deploy after re-running checks; GitHub as the source, never `deepspace push`; check the live site signed out. The user may have posted links before this deploy: from the owner account, count clicks recorded before this version per real channel, and propose (not run) a safe one-off way to stamp the experiment and owner on those rows. Don't touch the spike-test rows. Update README and AGENT_LOG, commit, push, stop.
+
+**What the agent did**
+
+- Pre-deploy checks: type-check and lint clean, unit tests 53 of 53, browser and API tests one file at a time 23 of 23.
+- Counted clicks BEFORE deploying, not after as asked: the new version lets each user read only clicks stamped with their own id, so after the deploy no account can read the old rows in the app. Read as the owner, paging through all rows. The count finished at 05:53:03 UTC and the deploy at 05:53:34 UTC.
+- Old clicks on the owner's experiment "Which channel gets people to try a DeepSpace-built app?": iMessage 19, Class Groupchat 7, LinkedIn 4, Instagram Story 3 (33 in total, 05:33 to 05:50 UTC). No clicks on any other user's channels. A click in the 31 seconds between the count and the deploy would be missing from these numbers.
+- Deployed release `rel_01M8B6N1R2SN6RA484A0VF1DFE` (GitHub source, clean tree, confirmed).
+- Live signed-out check: landing page 200, Sign in leads to the sign-in screen, unknown slugs (`/go/zzzz9999`, `/go/spike-test`, `/go/nope`) 404, HEAD 404, the three new actions 401 when signed out, no cookies, no console errors. After the deploy the owner reads 0 clicks, as expected.
+- Checked the SDK: `immutable` columns refuse changes even from server code, so the old rows cannot be stamped in place. The proposal was sent to the user; nothing was run.
+
+**Correction to Prompt 3**
+
+- There are 232 `spike-test` rows, not 128. The live reads in Prompt 3 used one page of results; the server caps a page at about 30 KB and flags it `truncated`, which the agent did not check. Counted again by timestamp: single click 1, burst A 40 of 40, B 11 of 40, C 50 of 50, D **130 of 200** (reported as 26). README and CLAUDE.md are corrected. The per-IP limit is leakier than first reported.
+
+**What the user changed**
+
+- Posted real tracked links before this deploy (the 33 clicks above).

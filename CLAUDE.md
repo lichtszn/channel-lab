@@ -33,7 +33,7 @@ Never store IP addresses in click rows.
 
 Click counts are approximate. The Cloudflare rate limiter stays as a coarse abuse filter: the per-IP limit is leaky on the live site, and the per-slug limit is tested only locally. Do not build the exact per-slug counter yet; it is the "what I'd do next" item in the README.
 
-The 128 rows on the test variant `spike-test` are test data. Do not delete them. That slug no longer redirects.
+The 232 rows on the test variant `spike-test` are test data (an earlier count of 128 was wrong). Do not delete them. That slug no longer redirects.
 
 ## Data and permissions
 
