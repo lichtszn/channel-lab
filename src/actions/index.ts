@@ -6,6 +6,8 @@
 import type { ActionHandler, ActionResult, ActionTools } from 'deepspace/worker'
 import type { Env } from '../../worker'
 import { isDecision, isHttpUrl } from '../schemas/experiments-schema'
+// TEMPORARY (2026-11-26): remove after the one-off click copy has run.
+import { backfillOldClicks } from './backfill-clicks'
 
 const MAX_TEXT = 2000
 
@@ -82,4 +84,5 @@ export const actions: Record<string, ActionHandler<Env>> = {
   createExperiment,
   setDecision,
   deleteChannel,
+  backfillOldClicks, // TEMPORARY
 }
