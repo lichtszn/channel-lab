@@ -457,6 +457,13 @@ Rewritten: what it is, live URL and repo, a "DeepSpace features used, and why" t
 - **Not as asked, with reason.** In Prompt 6 it counted old clicks before deploying, not after, because after the deploy nobody could read them.
 - **Stale comments.** After the caps changed to 3/10, two comments still said 5/50; found and fixed in this review.
 
+**Deploy and live check (2026-11-27 00:50 UTC)**
+
+- Pushed `f87b719` to GitHub, then deployed release `rel_01M8D7Q384841B2GN0D0JATM84` (GitHub source, clean tree). `deepspace push` not run. Production secrets still empty, so the readout is off.
+- Signed out, in a real browser: landing page loads; `/home`, `/experiments` and another user's experiment URL show the sign-in panel; an unknown page shows 404; Sign in leads to "Sign in to continue"; no cookies; no console errors.
+- Signed out, by request: unknown and `spike-test` slugs 404, HEAD and POST on `/go/` 404; file route 404 for GET, POST and PUT (also 404 as the owner); actions 401 (including `backfillOldClicks`); template integration route 403; AI chat 404; agent route 401. As the owner, `readoutSettings` says `enabled: false`.
+- **Agent error in the check:** the first probe got 500 on `/home` and `/experiments`. The production logs showed `ReadableStream is disturbed` in the template's page fallback. The cause was the agent's probe sending a JSON body with GET. A GET with a body still gives 500; a plain GET gives 200 (10 of 10). The same code is in the previous release, so this deploy did not cause it, and browsers never send such a request. Documented as a known gap; not fixed.
+
 **What the user changed (this task)**
 
-- (nothing yet)
+- (nothing recorded yet)

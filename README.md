@@ -96,6 +96,7 @@ Only the exact value `true` turns it on.
 - The experiment page loads every click row and counts them in the browser. Fine for a small team, slow with very many clicks.
 - Experiment details (title, hypothesis, audience, metric, destination) can't be edited from a screen yet.
 - The AI readout has never run against the real model.
+- A GET request that carries a body (browsers never send one) to an app page such as `/home` gets a 500, because the template's page fallback re-reads the request body. Plain GETs are fine. Found in the final live check; not fixed.
 - Template leftovers that stay on but are governed by permissions: the local-assistant tool routes (`/_deepspace/agent`) run with the caller's own permissions, and the records socket accepts any room id.
 
 ## What I'd do next
