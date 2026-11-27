@@ -26,8 +26,8 @@ export const integrations: Record<
 > = {
   google: { billing: 'user' },
   composio: { billing: 'user' },
-  // AI readouts (src/actions/readout.ts): the app owner pays, capped at 5 per
-  // user and 50 per app per UTC day. Signed-in callers only (no `anonymous`).
+  // AI readouts (src/actions/readout.ts): the app owner pays, capped at 3 per
+  // user and 10 per app per UTC day. Signed-in callers only (no `anonymous`).
   anthropic: { billing: 'developer' },
   // openai: { billing: 'developer', anonymous: true },
 }

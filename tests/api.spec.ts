@@ -27,6 +27,18 @@ test.describe('API tests', () => {
     }
   })
 
+  test('file upload route is closed', async ({ request }) => {
+    // The template answered 401 signed out and proxied to storage signed in.
+    // Our closed route answers 404 before looking at who is calling.
+    for (const method of ['GET', 'POST', 'PUT', 'DELETE'] as const) {
+      const res = await request.fetch('/api/files/upload', {
+        method,
+        ...(method === 'GET' ? {} : { data: 'x' }),
+      })
+      expect(res.status()).toBe(404)
+    }
+  })
+
   test('in-app AI chat is off', async ({ request }) => {
     for (const path of ['/api/ai/chat', '/api/ai/chats']) {
       const res = await request.post(path, { data: {} })

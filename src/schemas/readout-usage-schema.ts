@@ -2,8 +2,8 @@ import type { CollectionSchema, RolePermissions } from 'deepspace/schema'
 
 /**
  * One row per readout slot used. A readout first claims a per-user slot
- * (scope `user:<id>`, slots 1..5) and an app-wide slot (scope `app`, slots
- * 1..50) for the UTC day. `uniqueOn` makes the record room refuse a second row
+ * (scope `user:<id>`, slots 1..3) and an app-wide slot (scope `app`, slots
+ * 1..10) for the UTC day. `uniqueOn` makes the record room refuse a second row
  * for the same scope, day and slot, so concurrent requests cannot both take
  * the last slot. Only server actions write or read here.
  */

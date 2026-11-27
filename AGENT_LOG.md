@@ -399,3 +399,64 @@ The user cannot spend real money. No live paid call and no test call. Without ca
 - Signed out: landing page 200, Sign in leads to the sign-in screen, unknown `/go/` slugs 404, `generateReadout` and `readoutSettings` 401, no cookies, no console errors.
 - As the owner (free calls only): `readoutSettings` returned `enabled: false`, caps 3 and 10; `generateReadout` with a made-up experiment id returned `readout_off` with the user's message.
 - Credits: 499.978 remaining (0.0215 used). That is up from 0.0147 earlier the same day, with still no integration usage. Something small and not itemized is being metered (about US$0.00007 more), possibly deploys or requests; the source was not found.
+
+## 2026-11-26 - Prompts 9+10: security review, clean run, README, final deploy
+
+**Prompt**
+
+Fresh session. Confirm the folder, a clean tree, `whoami`, and that the click migration finished and its action is gone (404 live). No paid calls; don't turn on `READOUT_ENABLED`; about 90 minutes. (A) Skeptical security review of the whole repo, findings first, then fix only real problems: AI, email or integration calls outside server actions; paid or write endpoints usable without sign-in; secrets, keys or email addresses in the repo or history; cross-user reads; pages blank when signed out; missing loading, error or empty states; the click route's rules. (B) One fully clean run (retry only the known flaky template test alone). (C) README final polish (features table, left out on purpose, main tradeoff, known gaps, what I'd do next) and finish this log. (D) If code changed, deploy via GitHub after the clean run, check the live site signed out, commit, push. (E) A list of what the user should check by hand, and facts for the submission note.
+
+**Orientation**
+
+- `channel-lab`, branch `master`, clean tree, head `bde0a50`. `whoami`: `lichtszn`.
+- As the owner, `POST /api/actions/backfillOldClicks` returned 404 "Action not found" (401 signed out, like every action). `readoutSettings` returned `enabled: false`.
+
+**Security review findings (reported before any change)**
+
+Checked and fine:
+- Paid calls: only `generateReadout`, a server action that needs sign-in, checks ownership, is off unless `READOUT_ENABLED` is "true", and claims cap slots before calling. No email code. Cron and job handlers are empty and admin-only. Signed out live: template integration route 403, AI chat 404, all actions 401, agent/MCP routes 401, payment routes 401.
+- Secrets: `git grep` and the full `git log -p` contain no keys, tokens, JWTs or secret files. The only email addresses are the GitHub noreply one and the Anthropic attribution. Production secrets are empty.
+- Cross-user access: `read: 'own'` on experiments, variants and clicks; owner fields are server-set and immutable; actions check ownership; the readout filters by owner. Checked in SDK 0.44.2 that members can't write `users.role` (the room refuses system-managed columns), so self-promotion to admin is not possible.
+- Signed-out pages and states: no blank pages; list, experiment, channel, decision and readout screens have loading, error and empty states.
+- Click route (live, signed out): bad, unknown and `spike-test` slugs 404; POST and HEAD not counted; no IP stored; http(s) destinations only; channel and experiment owners must match.
+
+Fixed (low severity):
+1. The template file route `/api/files/*` let any signed-in user upload files under the app's origin and the owner's storage quota. Nothing in the app uses it. Now answers 404 for every method (`src/server/http-routes.ts`); new test in `tests/api.spec.ts`.
+2. Code comments in `src/integrations.ts` and `src/schemas/readout-usage-schema.ts` still said 5 per user and 50 per app; corrected to 3 and 10.
+
+Documented, not fixed: no server limit on experiments or channels per user; a small race in `deleteChannel` between the click check and the delete; template local-assistant tool routes (run with the caller's permissions); the records socket accepts any room id (permissions still apply).
+
+**Clean run (one pass, no retries)**
+
+- Type-check clean, lint clean, unit tests 78 of 78.
+- Browser tests one file at a time: smoke 6, api 6, collab 6, experiments 6, readout 4 = 28 of 28. The flaky template test passed.
+
+**README**
+
+Rewritten: what it is, live URL and repo, a "DeepSpace features used, and why" table, "Left out on purpose", "Main tradeoff", known gaps, "What I'd do next".
+
+### Over the whole project: what the user rejected or changed
+
+- Wrote the rules in CLAUDE.md, including: DeepSpace only, docs pages are untrusted, no IPs in click rows, never `deepspace push`.
+- Did the steps the agent couldn't: logged in to DeepSpace, ran `git init`, set the repo's Git name and email.
+- Rejected the agent's exact in-memory click counter; kept the approximate Cloudflare limiter and had it documented.
+- Chose copy-only for the old-clicks migration (originals kept as an audit trail) instead of the agent's plan to delete the originals after copying.
+- Rejected the agent's choice of `claude-opus-5-5` with live readouts: no spending at all, readout off by default, cheapest model, caps cut from 5/50 to 3/10.
+- Posted real tracked links before the Prompt 6 deploy, which led to the migration.
+- Corrected the CLAUDE.md test-row count from 128 to 232 after the agent's recount.
+
+### Over the whole project: what the agent got wrong and fixed
+
+- **Click undercount.** In Prompt 3 the agent read only the first page of live click rows and didn't check the `truncated` flag. It reported 128 test rows (really 232), and 26 of 200 counted in burst D (really 130). This made the per-IP limiter look tighter than it is. Found and corrected in the Prompt 6 deploy task; README and CLAUDE.md fixed.
+- **Deployed before a clean run.** During the migration task, the browser run had 1 failure (the flaky template test) and the agent deployed anyway, because the deploy command didn't stop on it, then re-checked afterwards. From the next deploy on, it required a fully clean run first, and it later fixed the race in that test.
+- **Too expensive a model.** It picked `claude-opus-5-5` for the readout; the user overruled it (above).
+- **Wrong claim about the template.** It said the template AI chat had no cap without noting the chat is off in the 0.44.2 starter; corrected in the next entry.
+- **Bug caught by its own test.** The decision panel reset when the saved value came back, hiding "Decision saved."; fixed in Prompt 6.
+- **Weak test.** The member click-row test in Prompt 3 first only printed its result; assertions were added later.
+- **Process left running.** `TaskStop` left the first Vite dev server running; the agent found and stopped it.
+- **Not as asked, with reason.** In Prompt 6 it counted old clicks before deploying, not after, because after the deploy nobody could read them.
+- **Stale comments.** After the caps changed to 3/10, two comments still said 5/50; found and fixed in this review.
+
+**What the user changed (this task)**
+
+- (nothing yet)

@@ -1,91 +1,119 @@
 # Channel Lab
 
-A GTM experiment tracker for a small team, built on DeepSpace: log experiments, get a tracked link per channel, see live clicks, record outcomes by hand, get an AI readout that cites its numbers, and mark each experiment keep / change / stop.
+A go-to-market experiment tracker for a small team. You write down an experiment (hypothesis, audience, success metric, destination link), add 2 to 4 channels, and get one tracked link per channel. Clicks show up live. You type in reach and outcomes by hand, read simple per-channel rates, can ask for an AI readout that must cite its numbers, and mark the experiment keep, change or stop.
 
-Status: early. Live at https://channel-lab.app.space. Source: https://github.com/lichtszn/channel-lab.
+- **Live:** https://channel-lab.app.space (sign in with Google or GitHub; open to anyone so reviewers can test)
+- **Source:** https://github.com/lichtszn/channel-lab
+- **Built on:** DeepSpace only (SDK 0.44.2 starter template). No other backend.
 
 ## What works
 
 - Public landing page, then sign-in with Google or GitHub.
-- My experiments list and a create-experiment form.
+- My experiments list, and a form to create one.
 - An experiment page with:
-  - 2 to 4 channels, each with a copyable tracked link: `https://channel-lab.app.space/go/<slug>`;
-  - live click counts per channel and clicks per day for the last 14 days (UTC). They update by themselves when someone clicks, with no polling;
-  - hand-entered reach (people who could see it), outcome count and outcome label per channel;
-  - rates per channel: clicks per reach, and outcomes per click. Both show "n/a" until reach is entered. They are simple ratios, not a significance test;
-  - rename a channel, and delete a channel after confirming;
+  - 2 to 4 channels, each with a copyable tracked link `https://channel-lab.app.space/go/<slug>`;
+  - live click counts per channel, and clicks per day for the last 14 days (UTC). They update by themselves, with no polling;
+  - hand-entered reach, outcome count and outcome label per channel;
+  - clicks per reach and outcomes per click, shown as "n/a" until reach is entered. They are plain ratios, not a significance test;
+  - rename a channel; delete a channel after confirming (only if it has no clicks);
   - a decision (keep, change, stop or undecided) with a short reason;
-  - a "Generate readout" button: a short AI memo naming the leading channel, quoting its numbers, with the numbers it was given shown beside it.
+  - a "Generate readout" button, switched off in production (see below).
 - The tracked link redirects to the experiment's destination and logs one click.
 
-## Who can see what
+## DeepSpace features used, and why
 
-- **Experiments and channels:** you see and change only your own. Other users cannot read, edit or delete them, and the app owner cannot see them in the app either.
-- **Click counts:** you see clicks only on your own experiments. A click row records which channel and experiment, whose experiment it is, and when. It never records anything about the visitor, such as an IP address.
-- **Owner field:** the server stamps each experiment and channel with its creator, and nobody can change it, so you cannot create rows in someone else's name.
-- **Server-checked values:** new experiments, decisions and destinations go through server actions that accept only `http://` or `https://` destinations and only the decisions keep, change, stop or none. Title, hypothesis, audience and success metric are the only experiment fields you can edit directly, and no screen edits them yet.
-- **Deleting:** nobody can delete experiments. Channels are deleted only through a server action that refuses any channel with clicks, so click data is never orphaned. Rename a channel instead.
-- **Tracked links:** each slug is unique and never changes. A link only works if the same person owns the channel and the experiment.
-- **Signed-out visitors** see only the landing page and can follow tracked links.
+| Feature | How Channel Lab uses it | Why |
+|---|---|---|
+| **Auth** (Google and GitHub sign-in, `AuthGate`) | Every page except the landing page and `/go/:slug` needs sign-in. Signed-out visitors get a "Sign in to continue" panel, never a blank page. | Reviewers can sign in with an account they already have. No passwords to store. |
+| **Records** (collections, live `useQuery` subscriptions) | `experiments`, `variants` (channels), `clicks`, `readout_usage`. The experiment page subscribes to its clicks, so counts update when someone clicks. | Live counts with no polling and no extra server. |
+| **Permissions** (`ownerField`, `userBound`, `immutable`, `writableFields`, `uniqueOn`) | Each user reads and edits only their own experiments, channels and clicks. The owner field is stamped by the server and can't be changed. Clients may edit only 4 experiment fields. Slugs are unique and never change. | Privacy between users is enforced by the database, not by the screens. |
+| **Server actions** | `createExperiment` (http(s) destinations only), `setDecision` (only none/keep/change/stop), `deleteChannel` (refuses channels with clicks), `generateReadout`, `readoutSettings`. Each loads the row and checks the caller owns it. | Rules that the record permissions can't express, and anything that costs money, run on the server. |
+| **Public worker route + Cloudflare rate limiting** (`[[ratelimits]]`) | `/go/:slug` is the one public route: look up the channel, apply 10/min per IP and 120/min per slug, write one click row (no visitor data), redirect. | Visitors click without signing in, and the limiter is a coarse abuse filter. |
+| **AI integration proxy** (`anthropic/chat-completion`, `billing: 'developer'`) | `generateReadout` is fully built, capped and tested with a fake model, but **off by default** in production. | One short memo that must cite only the numbers it was given. Off so the owner spends nothing. |
+| **Secrets** (`npx deepspace secrets`) | `READOUT_ENABLED` is the on/off switch. Production secrets are currently empty. | No keys or switches in the repo. |
+| **Deploy, GitHub as source** | `npx deepspace deploy` from a clean tree; GitHub is locked in as the source. `deepspace push` is never used. | The code people review is the code that runs. |
+| **Local dev and test tooling** (`deepspace dev`, test accounts) | Two DeepSpace test accounts run the two-user privacy tests against a real local record room. | Proves user B can't read or edit user A's data. |
 
-## AI readout
+## Left out on purpose
 
-**It is switched OFF in production by default, to avoid cost.** The button is disabled and says: "AI readout is switched off to avoid cost. It is fully built and tested with a fake model." The server refuses too, before claiming a cap slot or calling anything.
+- **Weekly email digest.** Not built. Email costs money and the user can't spend any. The cron table is empty.
+- **Cron and background jobs.** In the template, but empty, and locked to admins so a member can't trigger anything paid.
+- **In-app AI chat** (template). Off: it has no per-user daily cap.
+- **Template paid-integration route** `/api/integrations/:name/:endpoint`. Closed (403), so nobody can call paid services directly and skip the caps.
+- **Template file uploads** `/api/files/*`. Closed (404) in the final security review: the app stores no files, and the route let any signed-in user upload files under the app's origin.
+- **Payments.** No products; not needed.
+- **An exact click counter.** The Cloudflare limiter is enough as an abuse filter for now (see the main tradeoff).
+- **Live AI readouts.** Built and tested, but off until the real cost of one call is known.
 
-- **Who:** only the signed-in owner of the experiment. The app owner pays (`billing: 'developer'`).
-- **Caps:** 3 readouts per person and 10 for the whole app per UTC day. Each request claims a numbered slot (1 to 3 per person, 1 to 10 for the app) in a `readout_usage` table that refuses duplicates (`uniqueOn`), before any paid call. Tested with 8 simultaneous requests against the real local database: exactly 3 succeeded. A slot is used even when the AI fails or its memo is rejected, because the call was already paid for.
-- **Model:** `claude-haiku-5-5`, the cheapest suitable model, through the platform's `anthropic/chat-completion` (temperature 0, at most 700 output tokens).
-- **What the AI sees:** only, per channel, clicks, reach, outcome count and outcome label, plus the hypothesis and success metric.
-- **Number check:** every number in the memo must appear in that data, and the memo must say click counts are approximate, name a channel, and not claim statistical significance. If not, you get an error and a "Try again" button instead of the memo. The check is strict, so a valid memo that writes a date or a computed percentage is rejected and uses a slot.
-- **Not saved:** a readout is shown once; reloading the page clears it.
-- **Testing:** tests never call the AI. A fake model is used, and only works where `ALLOW_DEBUG_ROUTES` is on (local development). No real readout has ever been generated, so the reply format of the live AI service is untested.
+## Main tradeoff
 
-### Turning it on or off
+The app deliberately chose **approximate click counts with no visitor data** over exact counts. The public link stores only which channel was clicked, whose experiment it is, and when: never an IP address or anything else about the visitor. Abuse is held back by Cloudflare's rate limiter, which is simple and free but leaky. In live tests from one IP it counted 40 of 40 clicks in a 2-second burst, 50 of 50 over 41 seconds, and 130 of 200 in a 13-second burst, so one visitor can inflate a count. Exact per-slug counting needs a dedicated counter, and that was postponed. To keep this honest, every screen says counts are approximate and that a click is not a signup, rates are plain ratios, and the AI readout must say the same and may not claim significance.
 
-The switch is a DeepSpace secret, not code. It takes effect at the next deploy:
+## AI readout (off by default)
+
+**It is switched OFF in production to avoid cost.** The button is disabled and says: "AI readout is switched off to avoid cost. It is fully built and tested with a fake model." The server also refuses, before claiming a cap slot or calling anything.
+
+- **Who:** only the signed-in owner of the experiment. The app owner pays.
+- **Caps:** 3 per person and 10 for the whole app per UTC day. Each request claims a numbered slot in `readout_usage` (`uniqueOn` scope, day, slot) before any paid call. Tested with 8 simultaneous requests on the real local database: exactly 3 succeeded. A slot is used even if the AI fails or its memo is rejected.
+- **Model:** `claude-haiku-5-5`, the cheapest suitable model; temperature 0, at most 700 output tokens.
+- **What the AI sees:** only, per channel, the name, clicks, reach, outcome count and outcome label, plus the hypothesis and success metric. No titles, ids, slugs, links or user data.
+- **Number check:** every number in the memo must appear in that data, and the memo must say counts are approximate, name a channel, and not claim significance. Otherwise you get an error and "Try again", never the memo. The check is strict, so a memo with a date or a computed percentage is rejected (and uses a slot).
+- **Not saved:** a readout is shown once; reloading clears it.
+- **Tests never call the AI.** A fake model works only where `ALLOW_DEBUG_ROUTES` is on (local). No real readout has ever been generated, so the live reply format is untested.
+
+**Turning it on or off** (a secret, not code; takes effect at the next deploy):
 
 ```bash
 npx deepspace secrets set READOUT_ENABLED=true   # on
 npx deepspace deploy
-```
-
-```bash
 npx deepspace secrets delete READOUT_ENABLED     # off (the default)
 npx deepspace deploy
 ```
 
 Only the exact value `true` turns it on.
 
-### What it costs (checked 2026-11-26, without making any paid call)
+**Cost (checked 2026-11-26 without any paid call):** DeepSpace bills AI at the provider's actual cost plus a markup, with no fixed per-call price published. The account is on the free plan with 500 credits (US$5). About 0.02 credits (roughly US$0.0002) had been used, none of it by integrations; the source of that small usage wasn't found. Only integration calls are listed as charges. If credits run out, paid calls fail with `insufficient_credits`, which the readout shows as its error.
 
-- **Price per readout:** DeepSpace does not publish a fixed price. The catalog (`npx deepspace integrations info anthropic/chat-completion`) bills "the provider's actual cost plus a platform markup", varying with input size, and says free-tier pricing differs from paid-tier pricing except for `claude-haiku-5-5`, which gets standard pricing. Each readout sends one short prompt and gets up to 700 tokens back. The real cost would only be known from `npx deepspace app usage` after a first call.
-- **Your balance:** free plan, 500 credits (100 credits = US$1, so US$5). `app usage` showed 499.985 remaining early on 2026-11-26 and 499.978 after that day's deploys: about 0.02 credits (roughly US$0.0002) used in total, not itemized and not from any integration. The source of that small usage was not found. No credits purchased, no renewal date shown, no integration usage in the last 30 days.
-- **What else is billed:** the docs and the usage report list charges only for integration calls (AI, email and similar). No hosting, deploy or record charges appear. The free plan's limits are quotas, not charges: a cap on active apps and 128 MiB of file storage.
-- **If credits run out:** paid calls fail with an `insufficient_credits` error until the account is topped up; the readout would show its error and retry message. With no card or purchased credits, nothing can be charged beyond the balance.
+## Who can see what
 
-## Known limitations
+- **Experiments and channels:** only your own. The app owner can't see other users' rows in the app either.
+- **Clicks:** only clicks on your own experiments. A click row stores the channel, experiment, experiment owner and time, never visitor data.
+- **Owner field:** stamped by the server and immutable, so nobody can create rows in someone else's name.
+- **Tracked links:** a link only works if the same person owns the channel and the experiment, and only to http(s) destinations.
+- **Deleting:** nobody can delete experiments. Channels with clicks can't be deleted, so click data is never orphaned.
+- **Signed-out visitors** see only the landing page and can follow tracked links.
 
-**Click counts are approximate.** The public link `/go/:slug` uses Cloudflare's rate limiter as a coarse abuse filter (10 clicks per minute per IP, 120 per minute per slug). Clicks over a limit still redirect but are not counted. A click is not a signup.
+## Data notes
 
-- The per-IP limit is leaky on the live site. In tests on 2026-11-25 from one IP, it counted 40 of 40 clicks in a 2-second parallel burst, 11 of 40 on one reused connection, 50 of 50 over 41 seconds, and 130 of 200 in a 13-second burst. One visitor can inflate a count. (An earlier version of this note said 26 of 200 for the last burst; that read was cut off by a page-size limit.)
-- The per-slug limit has only been tested locally, where it was exact. It was not reached in the live tests.
+- **Older clicks were copied once.** Clicks from before 2026-11-26 05:53 UTC lacked an experiment and owner, so nobody could see them. A one-off, owner-only migration copied all 33 into new rows (ids start `bf-`) with the original time: iMessage 19, Class Groupchat 7, LinkedIn 4, Instagram Story 3. The originals stay untouched as an audit trail and invisible in the app, so nothing is counted twice. The temporary action has been removed; it returns 404.
+- **Test data.** 232 click rows on the test variant `spike-test` come from the rate-limit tests, not real visitors. That slug no longer works.
 
-**Older clicks were copied once.** Clicks recorded before 2026-11-26 05:53 UTC did not say which experiment or owner they belonged to, so nobody could see them, and their columns cannot be changed. On 2026-11-26 at 06:06 UTC a one-off, owner-only migration copied each one into a new row with the experiment and owner filled in and the original click time kept: 33 copies (iMessage 19, Class Groupchat 7, LinkedIn 4, Instagram Story 3). The original rows are kept, unchanged, as an audit trail; they stay invisible in the app, so nothing is counted twice. The copies have ids starting `bf-`. Spike-test rows were not copied. Re-running copied nothing. The temporary action was removed in the next deploy.
+## Known gaps
 
-**Test data.** The live `clicks` table holds 232 rows from the click tests (earlier notes said 128; that count was cut off by a page-size limit). They are on the test variant `spike-test` and are not real visitors. That slug is no longer a working link.
-
-**Checks that run in the screens only.** The 2 to 4 channels per experiment is enforced in the screens; the server would accept more.
-
-**Live click counts load every click row.** The experiment page subscribes to all of an experiment's click rows and counts them in the browser. That is fine for a small team, but would get slow with very many clicks.
-
-**Template test fixed (2026-11-26).** The scaffold's test "API status page renders loading success and error states" (`tests/collab.spec.ts`) used to fail intermittently, then every time: its fake catalog answered after 100 ms, and on this machine the page had already left the loading state before the test looked. The fake answer now waits until the test has seen the loading state, so the same states are checked without the race.
+- Click counts are approximate (see the main tradeoff). The per-slug limit has only been tested locally.
+- The 2 to 4 channels per experiment is enforced only in the screens; the server would accept more. There is also no server limit on how many experiments a user can create (no money at stake, only storage).
+- Deleting a channel checks for clicks and then deletes. A click landing in that split second would be left without a channel.
+- The experiment page loads every click row and counts them in the browser. Fine for a small team, slow with very many clicks.
+- Experiment details (title, hypothesis, audience, metric, destination) can't be edited from a screen yet.
+- The AI readout has never run against the real model.
+- Template leftovers that stay on but are governed by permissions: the local-assistant tool routes (`/_deepspace/agent`) run with the caller's own permissions, and the records socket accepts any room id.
 
 ## What I'd do next
 
-- Add an exact per-slug counter to replace the approximate limit.
-- Keep running per-day click totals on the server, so pages do not need every click row.
-- Enforce the 2 to 4 channel limit on the server.
-- Let users edit an experiment's title, hypothesis, audience, success metric and destination.
-- Save readouts so they survive a reload, and show how many are left today.
-- Measure the real cost of one readout (it is off until then) before deciding whether to turn it on.
-- Build the weekly email digest.
+1. Build the exact per-slug click counter, so counts are exact and the limiter is only a backstop.
+2. Keep running per-day click totals on the server, so pages don't need every click row.
+3. Enforce the 2 to 4 channel limit, and a per-user experiment limit, on the server.
+4. Screens to edit an experiment's details and destination.
+5. Measure the real cost of one readout, then decide whether to turn it on. Save readouts and show how many are left today.
+6. Build the weekly email digest (one per owner per week, counted against the app-wide cap).
+
+## Development
+
+```bash
+npm install
+npx deepspace dev start --host 127.0.0.1
+npm run type-check && npm run lint && npm run test:unit
+npx playwright test -c tests/playwright.config.ts --workers=1 tests/<file>.spec.ts   # one file at a time
+```
+
+Agent and decision history: [AGENT_LOG.md](AGENT_LOG.md).
