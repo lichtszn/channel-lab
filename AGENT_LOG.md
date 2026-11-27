@@ -490,3 +490,39 @@ Turn the AI readout on carefully: set `READOUT_ENABLED=true`, deploy via GitHub 
 
 - Ran `npx deepspace secrets set READOUT_ENABLED=true` themselves (the CLAUDE.md rule).
 - Reversed the earlier decision to keep the readout off.
+
+## 2026-11-27 - First real readout failed: token budget fix
+
+**Prompt**
+
+The user's first real Generate readout showed "No readout this time. The AI service did not answer. Try again in a moment." Diagnose without any paid call or second click: production log, `app usage`, the integration's spec against `src/actions/readout.ts`, likely cause and smallest fix; report first. Then (after the report): apply the fix with `max_tokens` 3000, make the README consistent with the readout being ON, log it, one clean run, deploy via GitHub, no paid call, commit, push, stop.
+
+**Diagnosis (read-only; no paid call)**
+
+- Production log, 2026-11-27 01:13:42 UTC: `[action] "generateReadout"` then `ERROR [readout] model call failed: The entire completion budget (max_tokens: 700) was consumed by reasoning tokens before any visible output was produced. Raise max_tokens to leave room for the answer.` The integration returned a failure with that message, which the action turned into the generic "did not answer" text.
+- `npx deepspace app usage`: billed. One completed `anthropic/chat-completion` charge at 01:13:42 UTC, **US$0.00055302** (credits 499.972 to 499.917). It also used 1 of the user's 3 daily slots and 1 of the app's 10, as designed.
+- `npx deepspace integrations info anthropic/chat-completion`: `claude-haiku-5-5` is a listed model (standard pricing). Input fields `model`, `max_tokens` (default 4096), `messages` (required), `system`, `temperature`: exactly what the action sends. No field to turn reasoning off. No published output schema; `memoText` reads only `text` blocks in `content`, so reasoning blocks are ignored, but this is unproven because no reply text has come back yet.
+- **Cause: the agent's own cost-cutting change.** When it moved to the cheapest model, the agent set `max_tokens: 700`, assuming the memo was the only output. `claude-haiku-5-5` reasons first, and reasoning counts against `max_tokens`, so nothing was left for the memo. Local tests used the fake model and could not catch this.
+
+**What the agent did**
+
+- `src/actions/readout.ts`: `max_tokens` 700 to 3000 (the user chose 3000 over the agent's suggested 2000). Caps, model and everything else unchanged.
+- README: output-token line now says 3000 and explains reasoning tokens count against it. Fixed the features table, the "Left out on purpose" email item, the readout section, the cost note (first call's cost, rough per-readout and daily bound, marked as an estimate), known gaps and next steps, so nothing says the readout is off, left out or untested where that conflicts with it being ON. Kept the turn-off instructions and the cost note.
+
+**What the user changed**
+
+- Chose `max_tokens` 3000 instead of the agent's proposed 2000.
+- Clicked Generate readout once (the only real call so far).
+
+### Same task, continued: production secret copied into local `.dev.vars`
+
+- **Finding:** the first clean run for the token fix failed on the readout test "with the switch off (the default)". `.dev.vars` had been rewritten at 01:09:21 UTC, during the readout-on deploy and 22 seconds after the user set the secret: the deploy copies production secrets into the local `.dev.vars` (header "App secrets · config prd"). That put `READOUT_ENABLED=true` into local dev. A local `generateReadout` without `fakeModel` would then make a real call billed to the owner, and the failing test makes such a call as its last step. It failed at its first screen check, before that call. Credits were unchanged (499.917) and no new integration charge appeared.
+- The agent stopped before deploying and asked. The user chose a code guard (option 1), with a fallback: if not clean by 8:15 PM CT, delete the local line only (option 2), document the gap, and deploy.
+- **Option 1 (built, not shipped):** `readoutEnabled` returns false wherever `ALLOW_DEBUG_ROUTES` is "true", plus two unit tests. With the guard removed, both new tests failed; restored, they passed. Unit tests 80 of 80. Browser run 1: four files passed, but the readout file printed no result (its rerun alone passed 4 of 4). Browser run 2, to get one fully clean pass: smoke passed, then api and collab failed with "Timed out waiting 60000ms from config.webServer" (no leftover processes found; a slow local server start, as seen before on this machine), and the run hung until 8:33 PM CT. Not clean by the deadline.
+- **Fallback (option 2) applied:** reverted the guard and its tests (saved as a patch outside the repo), kept `max_tokens: 3000`, and deleted only the `READOUT_ENABLED` line from the local `.dev.vars`. Production secrets untouched. The README documents the gap and that the next deploy may copy the line back.
+- **Clean run on the shipped code:** type-check and lint clean, unit tests 78 of 78, browser tests one file at a time 28 of 28 (smoke 6, api 6, collab 6, experiments 6, readout 4).
+- Credits after the runs: 499.9127. The only integration charge is still the user's 01:13 call; the about 0.004-credit drop is the same small, not-itemized metering seen before, not an AI call.
+
+**What the user changed (continued)**
+
+- Chose the code guard with a timed fallback to deleting the local line; the fallback applied.

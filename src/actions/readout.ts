@@ -98,7 +98,7 @@ export const anthropicCall =
   async (system, user) => {
     const r = await tools.integration(READOUT_ENDPOINT, {
       model: READOUT_MODEL,
-      max_tokens: 700,
+      max_tokens: 3000,
       temperature: 0,
       system,
       messages: [{ role: 'user', content: user }],

@@ -29,14 +29,14 @@ A go-to-market experiment tracker for a small team. You write down an experiment
 | **Permissions** (`ownerField`, `userBound`, `immutable`, `writableFields`, `uniqueOn`) | Each user reads and edits only their own experiments, channels and clicks. The owner field is stamped by the server and can't be changed. Clients may edit only 4 experiment fields. Slugs are unique and never change. | Privacy between users is enforced by the database, not by the screens. |
 | **Server actions** | `createExperiment` (http(s) destinations only), `setDecision` (only none/keep/change/stop), `deleteChannel` (refuses channels with clicks), `generateReadout`, `readoutSettings`. Each loads the row and checks the caller owns it. | Rules that the record permissions can't express, and anything that costs money, run on the server. |
 | **Public worker route + Cloudflare rate limiting** (`[[ratelimits]]`) | `/go/:slug` is the one public route: look up the channel, apply 10/min per IP and 120/min per slug, write one click row (no visitor data), redirect. | Visitors click without signing in, and the limiter is a coarse abuse filter. |
-| **AI integration proxy** (`anthropic/chat-completion`, `billing: 'developer'`) | `generateReadout`, capped at 3 per user and 10 per app per UTC day. Off by default; **turned on in production on 2026-11-27**. | One short memo that must cite only the numbers it was given. The caps bound what the owner can spend. |
+| **AI integration proxy** (`anthropic/chat-completion`, `billing: 'developer'`) | `generateReadout` (`claude-haiku-5-5`), **on in production since 2026-11-27**, capped at 3 per user and 10 per app per UTC day. | One short memo that must cite only the numbers it was given. The caps bound what the owner can spend. |
 | **Secrets** (`npx deepspace secrets`) | `READOUT_ENABLED` is the on/off switch. Production holds only this secret, set to `true` by the user on 2026-11-27. | No keys or switches in the repo. |
 | **Deploy, GitHub as source** | `npx deepspace deploy` from a clean tree; GitHub is locked in as the source. `deepspace push` is never used. | The code people review is the code that runs. |
 | **Local dev and test tooling** (`deepspace dev`, test accounts) | Two DeepSpace test accounts run the two-user privacy tests against a real local record room. | Proves user B can't read or edit user A's data. |
 
 ## Left out on purpose
 
-- **Weekly email digest.** Not built. Email costs money and the user can't spend any. The cron table is empty.
+- **Weekly email digest.** Not built. It would add a second paid service and scheduled spending with no signed-in user; the AI readout is the only paid feature. The cron table is empty.
 - **Cron and background jobs.** In the template, but empty, and locked to admins so a member can't trigger anything paid.
 - **In-app AI chat** (template). Off: it has no per-user daily cap.
 - **Template paid-integration route** `/api/integrations/:name/:endpoint`. Closed (403), so nobody can call paid services directly and skip the caps.
@@ -50,15 +50,16 @@ The app deliberately chose **approximate click counts with no visitor data** ove
 
 ## AI readout (ON since 2026-11-27)
 
-**It is ON in production.** The user set `READOUT_ENABLED=true` on 2026-11-27 and it went live with release `rel_01M8D8T1XAHP9DEQ8FF85N9RVS`. Real readouts now bill the owner's DeepSpace credits, within the caps below. When it is off, the button is disabled and says: "AI readout is switched off to avoid cost. It is fully built and tested with a fake model.", and the server refuses before claiming a cap slot or calling anything.
+**It is ON in production.** The user set `READOUT_ENABLED=true` on 2026-11-27. Real readouts bill the owner's DeepSpace credits, within the caps below. If it is ever switched off, the button is disabled and says: "AI readout is switched off to avoid cost. It is fully built and tested with a fake model.", and the server refuses before claiming a cap slot or calling anything.
 
 - **Who:** only the signed-in owner of the experiment. The app owner pays.
 - **Caps:** 3 per person and 10 for the whole app per UTC day. Each request claims a numbered slot in `readout_usage` (`uniqueOn` scope, day, slot) before any paid call. Tested with 8 simultaneous requests on the real local database: exactly 3 succeeded. A slot is used even if the AI fails or its memo is rejected.
-- **Model:** `claude-haiku-5-5`, the cheapest suitable model; temperature 0, at most 700 output tokens.
+- **Model:** `claude-haiku-5-5`, the cheapest suitable model; temperature 0, at most 3000 output tokens. The model reasons before it answers and those reasoning tokens count against this limit, so it must leave room for the memo; the first limit, 700, did not (see below).
 - **What the AI sees:** only, per channel, the name, clicks, reach, outcome count and outcome label, plus the hypothesis and success metric. No titles, ids, slugs, links or user data.
 - **Number check:** every number in the memo must appear in that data, and the memo must say counts are approximate, name a channel, and not claim significance. Otherwise you get an error and "Try again", never the memo. The check is strict, so a memo with a date or a computed percentage is rejected (and uses a slot).
 - **Not saved:** a readout is shown once; reloading clears it.
-- **Tests never call the AI.** A fake model works only where `ALLOW_DEBUG_ROUTES` is on (local). The agent has never made a real call. The live reply format was untested until the user's first click on Generate readout after this deploy: if the real reply is shaped differently from what `memoText` expects, or the memo fails the number check, that first click shows an error and uses a slot.
+- **Tests never call the AI.** A fake model works only where `ALLOW_DEBUG_ROUTES` is on (local). The agent has never made a real call; only the user clicks.
+- **First real readout (2026-11-27 01:13 UTC) failed.** The production log said the whole 700-token budget was used up by reasoning before any answer was written. The call was billed (US$0.00055302) and used a slot. The limit is now 3000. Until a real readout succeeds, the live reply text has not been seen, so `memoText`'s reading of it and the number check are still unproven against the real model.
 
 **Turning it off** (a secret, not code; takes effect at the next deploy):
 
@@ -71,7 +72,7 @@ To turn it back on: `npx deepspace secrets set READOUT_ENABLED=true`, then `npx 
 
 Only the exact value `true` turns it on.
 
-**Cost (checked 2026-11-26 without any paid call):** DeepSpace bills AI at the provider's actual cost plus a markup, with no fixed per-call price published. The account is on the free plan with 500 credits (US$5). About 0.02 credits (roughly US$0.0002) had been used, none of it by integrations; the source of that small usage wasn't found. Only integration calls are listed as charges. If credits run out, paid calls fail with `insufficient_credits`, which the readout shows as its error. Baseline just before the readout went on (2026-11-27 01:10 UTC): 499.972 credits remaining, no integration usage. Compare against this after the first real readout to see its cost.
+**Cost (checked 2026-11-26 without any paid call):** DeepSpace bills AI at the provider's actual cost plus a markup, with no fixed per-call price published. The account is on the free plan with 500 credits (US$5). About 0.02 credits (roughly US$0.0002) had been used, none of it by integrations; the source of that small usage wasn't found. Only integration calls are listed as charges. If credits run out, paid calls fail with `insufficient_credits`, which the readout shows as its error. Just before the readout went on (2026-11-27 01:10 UTC): 499.972 credits remaining, no integration usage. The first real call (the failed one, about 700 tokens of reasoning) cost US$0.00055302 (about 0.055 credits). Assuming cost grows with tokens used, a readout that uses the full 3000 would be roughly US$0.0024, so the 10-a-day app cap bounds spending at about US$0.024 a day. That is an estimate from one call, not a published price; `npx deepspace app usage` shows the real figures.
 
 ## Who can see what
 
@@ -94,7 +95,9 @@ Only the exact value `true` turns it on.
 - Deleting a channel checks for clicks and then deletes. A click landing in that split second would be left without a channel.
 - The experiment page loads every click row and counts them in the browser. Fine for a small team, slow with very many clicks.
 - Experiment details (title, hypothesis, audience, metric, destination) can't be edited from a screen yet.
-- The AI readout's real reply format was untested until the user's first click after the 2026-11-27 deploy. A strict number check can reject a valid memo (for example one with a date or a percentage), which still uses a slot.
+- No real readout has succeeded yet: the first one ran out of tokens while reasoning (fixed by raising the limit to 3000), so the real reply text is still unseen. If the model reasons past 3000 tokens the same error returns. The strict number check can also reject a valid memo (for example one with a date or a percentage). Either way a slot is used.
+- Every model failure shows the same "The AI service did not answer" message; the real reason is only in the production log.
+- **Local runs can inherit the production switch.** `npx deepspace deploy` copies the production secrets into the local `.dev.vars` (under "App secrets · config prd"). On 2026-11-27 that put `READOUT_ENABLED=true` into local dev, so a local `generateReadout` without the fake model would have made a real, owner-billed call. The line was deleted by hand. **The next deploy may copy it back**, so check `.dev.vars` after every deploy while the readout is on, and delete that line before running tests. A code guard (refuse real calls wherever `ALLOW_DEBUG_ROUTES` is "true") was built and unit-tested, but not shipped: the full browser run didn't finish by the deadline, so the user's fallback applied.
 - A GET request that carries a body (browsers never send one) to an app page such as `/home` gets a 500, because the template's page fallback re-reads the request body. Plain GETs are fine. Found in the final live check; not fixed.
 - Template leftovers that stay on but are governed by permissions: the local-assistant tool routes (`/_deepspace/agent`) run with the caller's own permissions, and the records socket accepts any room id.
 
@@ -104,7 +107,7 @@ Only the exact value `true` turns it on.
 2. Keep running per-day click totals on the server, so pages don't need every click row.
 3. Enforce the 2 to 4 channel limit, and a per-user experiment limit, on the server.
 4. Screens to edit an experiment's details and destination.
-5. Check the real cost of a readout in `npx deepspace app usage` after the first clicks. Save readouts, and show how many are left today.
+5. Show a clearer error when the model runs out of tokens. Save readouts, and show how many are left today. Track the real cost per readout in `npx deepspace app usage`.
 6. Build the weekly email digest (one per owner per week, counted against the app-wide cap).
 
 ## Development
