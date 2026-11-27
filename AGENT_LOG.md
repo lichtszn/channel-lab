@@ -526,3 +526,10 @@ The user's first real Generate readout showed "No readout this time. The AI serv
 **What the user changed (continued)**
 
 - Chose the code guard with a timed fallback to deleting the local line; the fallback applied.
+
+**Deploy and live check (2026-11-27 02:41 UTC)**
+
+- Deployed release `rel_01M8DE2ZB52W7W6QKZHSZ6A30H` from `e7e303b` (GitHub source, clean tree). `deepspace push` not run. Production secret `READOUT_ENABLED` unchanged (v1).
+- **The deploy copied the line back:** `.dev.vars` was rewritten at 02:41:34 UTC with `READOUT_ENABLED=true` again, confirming the gap. The agent deleted the local line again; production untouched.
+- Signed out: landing page, `/home` and `/experiments` load and show the sign-in panel; unknown page 404; unknown and `spike-test` slugs 404; file route 404; readout actions 401; template integration route 403; AI chat 404; no cookies; no console errors in a real browser. As the owner, `readoutSettings` (free) says `enabled: true`, caps 3 and 10.
+- No paid call by the agent: credits 499.9127, and the only integration charge is still the user's 01:13 call.
