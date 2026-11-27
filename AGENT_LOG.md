@@ -501,7 +501,7 @@ The user's first real Generate readout showed "No readout this time. The AI serv
 
 - Production log, 2026-11-27 01:13:42 UTC: `[action] "generateReadout"` then `ERROR [readout] model call failed: The entire completion budget (max_tokens: 700) was consumed by reasoning tokens before any visible output was produced. Raise max_tokens to leave room for the answer.` The integration returned a failure with that message, which the action turned into the generic "did not answer" text.
 - `npx deepspace app usage`: billed. One completed `anthropic/chat-completion` charge at 01:13:42 UTC, **US$0.00055302** (credits 499.972 to 499.917). It also used 1 of the user's 3 daily slots and 1 of the app's 10, as designed.
-- `npx deepspace integrations info anthropic/chat-completion`: `claude-haiku-5-5` is a listed model (standard pricing). Input fields `model`, `max_tokens` (default 4096), `messages` (required), `system`, `temperature`: exactly what the action sends. No field to turn reasoning off. No published output schema; `memoText` reads only `text` blocks in `content`, so reasoning blocks are ignored, but this is unproven because no reply text has come back yet.
+- `npx deepspace integrations info anthropic/chat-completion`: `claude-haiku-5-5` is a listed model (standard pricing). Input fields `model`, `max_tokens` (default 4096), `messages` (required), `system`, `temperature`: exactly what the action sends. No field to turn reasoning off. No published output schema; `memoText` reads only `text` blocks in `content`, so reasoning blocks are ignored. (At the time unproven, as no reply text had come back; the second real readout, logged below, proved it.)
 - **Cause: the agent's own cost-cutting change.** When it moved to the cheapest model, the agent set `max_tokens: 700`, assuming the memo was the only output. `claude-haiku-5-5` reasons first, and reasoning counts against `max_tokens`, so nothing was left for the memo. Local tests used the fake model and could not catch this.
 
 **What the agent did**
@@ -533,3 +533,25 @@ The user's first real Generate readout showed "No readout this time. The AI serv
 - **The deploy copied the line back:** `.dev.vars` was rewritten at 02:41:34 UTC with `READOUT_ENABLED=true` again, confirming the gap. The agent deleted the local line again; production untouched.
 - Signed out: landing page, `/home` and `/experiments` load and show the sign-in panel; unknown page 404; unknown and `spike-test` slugs 404; file route 404; readout actions 401; template integration route 403; AI chat 404; no cookies; no console errors in a real browser. As the owner, `readoutSettings` (free) says `enabled: true`, caps 3 and 10.
 - No paid call by the agent: credits 499.9127, and the only integration charge is still the user's 01:13 call.
+
+## 2026-11-27 - Second real readout succeeded (docs only)
+
+**Prompt**
+
+Docs only (no deploy, tests, paid call or code change): report the second readout's cost from `npx deepspace app usage`; in README and AGENT_LOG, replace the "no real readout has succeeded yet / reply text unseen" statements with the second readout's success, the real cost and the slots used; keep the gaps that are still true; commit, push, stop.
+
+**What happened (from the user and the usage report)**
+
+- The user clicked Generate readout once more at 2026-11-27 02:45 UTC, after the `max_tokens` 3000 fix. It **succeeded**: the real reply parsed (`memoText` read its text blocks), the memo passed the number check, and it was shown. It used the user's 2nd of 3 daily slots.
+- Cost: **US$0.00084396** (about 0.084 credits), billed as a charge (hold) of US$0.00204802 at 02:45:16 UTC, then a settlement (refund) of US$0.00120406 at 02:45:22 UTC. Credits 499.9127 to 499.8283. Total AI spend: US$0.00139698 over 2 calls.
+- The production log shows the `generateReadout` call at 02:45:16 and its response at 02:45:22, with no `[readout]` error. A rejected memo isn't logged, so the number-check pass comes from the user's report.
+
+**What the agent did**
+
+- README: the readout section and known gaps now say the second readout succeeded, with its cost, and the cost note uses the real figure (about US$0.01 a day at the 10-a-day cap) instead of the earlier estimate. Kept the gaps that are still true: the deploy copying the production secret into local `.dev.vars`, readouts not saved, the generic "did not answer" error, and that the token limit or the number check can still cost a slot.
+- AGENT_LOG: marked the earlier "unproven" note as proven by this readout. Quoted past prompts were left as they were written.
+- No deploy, no test runs, no code change, no paid call.
+
+**What the user changed**
+
+- Clicked Generate readout a second time (the second real call).
