@@ -467,3 +467,26 @@ Rewritten: what it is, live URL and repo, a "DeepSpace features used, and why" t
 **What the user changed (this task)**
 
 - (nothing recorded yet)
+
+## 2026-11-27 - AI readout turned ON
+
+**Prompt**
+
+Turn the AI readout on carefully: set `READOUT_ENABLED=true`, deploy via GitHub after one clean test run (never `deepspace push`). Caps stay 3 per user and 10 per app per day; model stays `claude-haiku-5-5`. Make no paid call; the user will click Generate readout once. Check the live site signed out. Update README and AGENT_LOG (readout is on, how to turn it off, first real reply format untested until the user's click). Commit, push, stop.
+
+**What the agent did**
+
+- Pointed out that CLAUDE.md says only the user may set `READOUT_ENABLED`, and asked who should run the command. The user chose to run it themselves.
+- Clean run before the deploy, with no code changes since `29b4fa7`: type-check and lint clean, unit tests 78 of 78, browser tests one file at a time 28 of 28 (smoke 6, api 6, collab 6, experiments 6, readout 4).
+- Confirmed by name only that `READOUT_ENABLED` exists in `prd` (v1, set 01:08:59 UTC). Its value was never printed.
+- Deployed release `rel_01M8D8T1XAHP9DEQ8FF85N9RVS` from `29b4fa7` (GitHub source, clean tree). `deepspace push` not run.
+- Live check, signed out: landing page, `/home` and `/experiments` load and show the sign-in panel; unknown page 404; unknown and `spike-test` slugs 404; file route 404; `generateReadout` and `readoutSettings` 401; template integration route 403; AI chat 404; no cookies; no console errors in a real browser.
+- As the owner, the free `readoutSettings` action returned `enabled: true`, caps 3 and 10. The agent did not call `generateReadout` and made no paid call.
+- Credits before the user's first click: 499.972 remaining (0.0277 used), no integration usage.
+- README: the readout is on, how to turn it off, and the cost baseline. It also says the real reply format was untested until the user's first click, so that click may show a format or number-check error and still use a slot.
+- Caps, model and code unchanged.
+
+**What the user changed**
+
+- Ran `npx deepspace secrets set READOUT_ENABLED=true` themselves (the CLAUDE.md rule).
+- Reversed the earlier decision to keep the readout off.
